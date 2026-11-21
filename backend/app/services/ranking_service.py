@@ -1,6 +1,6 @@
 import logging
-import pandas as pd
-from datetime import date
+import polars as pl
+from datetime import date, timedelta
 from typing import Optional
 from app.models import LeagueRankings, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError
@@ -9,6 +9,7 @@ from app.builders.response_builder import ResponseBuilder
 from app.services import tonight_changes
 from app.utils.constants import RANKING_CATEGORIES, PER_GAME_CATEGORIES, DERIVED_CATEGORIES, RATIO_CATEGORIES
 from app.config import settings
+from app.utils.frames import dicts_frame
 
 class RankingService:
     """Service for ranking-related operations"""
@@ -79,21 +80,38 @@ class RankingService:
         through last night plus tonight, finished games only for averages and
         every started game for totals. The state is None unless the range
         reaches tonight with LIVE_STANDINGS_ENABLED on; otherwise the range is
-        exactly as before. ``settled`` never takes that live end."""
+        exactly as before.
+
+        ``settled`` (the daily recap: the night the nightly job finished, never
+        a slate in progress) ends at the range's last night. When the stored
+        snapshots don't hold that night yet, it is taken from the live frames
+        if they are that night with every game final (ESPN hasn't rolled the
+        period over yet: tonight_changes.is_finished_night); otherwise the
+        snapshot is synced first, for the minutes after ESPN's rollover before
+        anything wrote it. Failing both it is the stored days, as before."""
+        snapshots = self.data_provider.db_service.get_snapshots_for_date_range
         actual_end_date, actual_start_date, rows_end, rows_start = \
-            await self.data_provider.db_service.get_snapshots_for_date_range(
-                start_date, end_date, settings.league_id, settings.season_id
-            )
+            await snapshots(start_date, end_date, settings.league_id, settings.season_id)
 
         if actual_end_date is None or not rows_end:
             raise ResourceNotFoundError("No data available for the requested date range")
 
-        start_df = pd.DataFrame(rows_start) if rows_start else None
         state = None
         if not settled:
             state = await self.data_provider.get_live_state(include_finals=True)
             if not tonight_changes.range_reaches_tonight(state, end_date):
                 state = None
+        elif actual_end_date < (night := end_date - timedelta(days=1)):
+            state = await self.data_provider.get_live_state(include_finals=True)
+            if not tonight_changes.is_finished_night(state, night):
+                state = None
+                if await self.data_provider.sync_db_now():
+                    actual_end_date, actual_start_date, rows_end, rows_start = \
+                        await snapshots(start_date, end_date, settings.league_id, settings.season_id)
+                    if actual_end_date is None or not rows_end:
+                        raise ResourceNotFoundError("No data available for the requested date range")
+
+        start_df = dicts_frame(rows_start) if rows_start else None
         if state is not None and state.active:
             try:
                 settled_frame = tonight_changes.as_snapshot(await self.data_provider.get_totals_df(live=True, settled=True))
@@ -103,7 +121,7 @@ class RankingService:
             except Exception as e:
                 self.logger.error(f"Live range end failed, serving stored days: {type(e).__name__}: {e}", exc_info=True)
                 state = None
-        delta_df = self._compute_delta(pd.DataFrame(rows_end), start_df)
+        delta_df = self._compute_delta(dicts_frame(rows_end), start_df)
         return actual_start_date, actual_end_date, delta_df, delta_df, state
 
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
@@ -142,7 +160,7 @@ class RankingService:
         )
         return with_live(response, live_state)
 
-    def _compute_delta(self, end_df: pd.DataFrame, start_df: Optional[pd.DataFrame]) -> pd.DataFrame:
+    def _compute_delta(self, end_df: pl.DataFrame, start_df: Optional[pl.DataFrame]) -> pl.DataFrame:
         """Compute per-team delta between end and start snapshots.
 
         Both frames are keyed by category code and carry whatever categories the
@@ -154,39 +172,41 @@ class RankingService:
         counting_cols = [c for c in end_df.columns
                          if c not in id_cols and c not in DERIVED_CATEGORIES]
 
-        if start_df is None or start_df.empty:
-            delta = end_df[id_cols + counting_cols].copy()
+        if start_df is None or start_df.is_empty():
+            delta = end_df.select(id_cols + counting_cols)
         else:
             shared = [c for c in counting_cols if c in start_df.columns]
-            merged = end_df.merge(start_df[['team_id'] + shared], on='team_id', suffixes=('_end', '_start'))
-            delta = pd.DataFrame()
-            delta['team_id'] = merged['team_id']
-            delta['team_name'] = end_df.set_index('team_id').loc[merged['team_id'].values, 'team_name'].values
-            for col in counting_cols:
-                if col in shared:
-                    delta[col] = merged[f'{col}_end'] - merged[f'{col}_start']
-                else:
-                    delta[col] = merged[col]
+            start = start_df.select(['team_id'] + shared).rename({c: f'{c}__start' for c in shared})
+            merged = end_df.join(start, on='team_id', how='inner', maintain_order='left')
+            delta = merged.select(
+                'team_id', 'team_name',
+                *[(pl.col(c) - pl.col(f'{c}__start')).alias(c) if c in shared else pl.col(c)
+                  for c in counting_cols],
+            )
 
         for category, (numerator, denominator) in RATIO_CATEGORIES.items():
             if category not in end_df.columns:
                 continue
             if numerator in delta.columns and denominator in delta.columns:
-                delta[category] = (delta[numerator] / delta[denominator].replace(0, float('nan'))).fillna(0)
+                den = pl.col(denominator).cast(pl.Float64)
+                delta = delta.with_columns(
+                    (pl.col(numerator).cast(pl.Float64) / pl.when(den == 0).then(None).otherwise(den))
+                    .fill_nan(0.0).fill_null(0.0).alias(category)
+                )
         return delta
 
-    def _delta_categories_df(self, delta_df: pd.DataFrame, categories: list[str]) -> pd.DataFrame:
+    def _delta_categories_df(self, delta_df: pl.DataFrame, categories: list[str]) -> pl.DataFrame:
         """delta_df narrowed to the league's scoring categories plus team info.
 
         Drops the made/attempted feeders and anything else the delta carries that
         is not itself scored, so nothing unscored reaches calculate_rankings and
         gets ranked as if it were a category."""
         cols = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in delta_df.columns]
-        return delta_df[[c for c in cols if c in delta_df.columns]].copy()
+        return delta_df.select([c for c in cols if c in delta_df.columns])
 
-    def _build_averages_rankings_df(self, delta_df: pd.DataFrame,
+    def _build_averages_rankings_df(self, delta_df: pl.DataFrame,
                                      categories: Optional[list[str]] = None,
-                                     reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                     reverse_categories: Optional[set] = None) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Build (raw averages, rankings) DataFrames from delta (divide counting stats by GP)."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
@@ -196,9 +216,9 @@ class RankingService:
         averages_df = transformer.totals_to_averages_df(df, categories)
         return averages_df, transformer.averages_to_rankings_df(averages_df, reverse_categories)
 
-    def _build_totals_rankings_df_from_delta(self, delta_df: pd.DataFrame,
+    def _build_totals_rankings_df_from_delta(self, delta_df: pl.DataFrame,
                                               categories: Optional[list[str]] = None,
-                                              reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                              reverse_categories: Optional[set] = None) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Build (raw totals, rankings) DataFrames directly from delta counting stats."""
         from app.services.data_transformer import DataTransformer
         transformer = DataTransformer()
@@ -207,9 +227,9 @@ class RankingService:
         df = self._delta_categories_df(delta_df, categories)
         return df, transformer.averages_to_rankings_df(df, reverse_categories)
 
-    def _build_totals_rankings_df(self, totals_df: pd.DataFrame,
+    def _build_totals_rankings_df(self, totals_df: pl.DataFrame,
                                    categories: Optional[list[str]] = None,
-                                   reverse_categories: Optional[set] = None) -> tuple[pd.DataFrame, pd.DataFrame]:
+                                   reverse_categories: Optional[set] = None) -> tuple[pl.DataFrame, pl.DataFrame]:
         """Build (raw totals, rankings) DataFrames from season totals (no per-game division).
         categories defaults to RANKING_CATEGORIES."""
         from app.services.data_transformer import DataTransformer
@@ -217,7 +237,7 @@ class RankingService:
 
         categories = categories or RANKING_CATEGORIES
         cols_to_keep = ['team_id', 'team_name', 'GP'] + [c for c in categories if c in totals_df.columns]
-        df = totals_df[[c for c in cols_to_keep if c in totals_df.columns]].copy()
+        df = totals_df.select([c for c in cols_to_keep if c in totals_df.columns])
         return df, transformer.averages_to_rankings_df(df, reverse_categories)
 
     def _is_valid_sort_column(self, sort_by: str, rankings_df) -> bool:

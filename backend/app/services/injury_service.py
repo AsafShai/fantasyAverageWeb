@@ -1,5 +1,4 @@
 import asyncio
-import io
 import json
 import logging
 import re
@@ -8,10 +7,11 @@ from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import httpx
-import pdfplumber
+import pypdfium2 as pdfium
 
 from app.models.injury_models import InjuryRecord, InjuryNotification
 from app.services.db_service import get_db_service
+from app.utils.pdf_words import extract_words
 from app.utils.request_context import start_job_run
 from app.utils.ssl_context import shared_ssl_context
 from app.utils.memory import trim_memory
@@ -203,13 +203,19 @@ def parse_injury_report(pdf_bytes: bytes) -> InjuryReport:
         return None
 
     all_words: list[dict] = []
-    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-        for page_idx, page in enumerate(pdf.pages):
+    pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        for page_idx in range(len(pdf)):
             page_offset = page_idx * 10000
-            for word in page.extract_words():
-                word = dict(word)
-                word["top"] = word["top"] + page_offset
-                all_words.append(word)
+            page = pdf[page_idx]
+            try:
+                for word in extract_words(page):
+                    word["top"] = word["top"] + page_offset
+                    all_words.append(word)
+            finally:
+                page.close()
+    finally:
+        pdf.close()
 
     rows: dict[float, dict[str, list[str]]] = {}
     not_submitted_ys: set[float] = set()
@@ -365,12 +371,13 @@ def parse_injury_report(pdf_bytes: bytes) -> InjuryReport:
 
 
 def _parse_and_trim(pdf_bytes: bytes) -> InjuryReport:
-    """parse_injury_report, then hand pdfminer's garbage back to the OS.
+    """parse_injury_report, then hand the parse's freed memory back to the OS.
 
-    pdfminer leaves its page objects in reference cycles, so they linger until
-    a full collection, and glibc keeps the freed arenas mapped afterwards. This
-    runs every 15 minutes all day; without the trim each parse left ~18 MB
-    resident (measured on a real report: +26 MB vs +8 MB).
+    This runs every 15 minutes all day, and glibc keeps freed arenas mapped
+    until trimmed. With pdfplumber (pdfminer's page objects sat in reference
+    cycles until a full collection) an untrimmed parse left ~18 MB resident;
+    the pdfium parse peaks at ~3 MB and leaves ~2 MB, but the trim stays cheap
+    insurance.
     """
     report = parse_injury_report(pdf_bytes)
     trim_memory()

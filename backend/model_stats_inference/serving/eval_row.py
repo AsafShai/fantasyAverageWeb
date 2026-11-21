@@ -28,7 +28,8 @@ class EvalRow:
 
 
 def _actual_line(row) -> dict[str, float]:
-    out = {s: float(row[s]) for s in DISPLAY_STATS if s in row.index and s not in ("FG_PCT", "FT_PCT")}
+    keys = row.keys() if isinstance(row, dict) else row.index
+    out = {s: float(row[s]) for s in DISPLAY_STATS if s in keys and s not in ("FG_PCT", "FT_PCT")}
     out["FG_PCT"] = round(out["FGM"] / out["FGA"], 3) if out.get("FGA") else 0.0
     out["FT_PCT"] = round(out["FTM"] / out["FTA"], 3) if out.get("FTA") else 0.0
     return out

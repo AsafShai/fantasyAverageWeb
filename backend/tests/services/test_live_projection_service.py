@@ -2,6 +2,8 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.services.live_projection_service import LiveProjectionService
@@ -11,10 +13,12 @@ from app.services.nba_matchup_service import GameInfo
 @pytest.mark.asyncio
 async def test_unmatched_players_are_logged_once_per_slate(caplog):
     service = LiveProjectionService()
-    players_df = pd.DataFrame([
-        {'Name': 'Aday Mara', 'Pro Team': 'LAL'},
-        {'Name': 'Tacko Fall', 'Pro Team': 'LAL'},
-        {'Name': 'No Game', 'Pro Team': 'BOS'},
+    players_df = pl.DataFrame([
+        {'Name': 'Aday Mara', 'Pro Team': 'LAL', 'GP': 4},
+        {'Name': 'Tacko Fall', 'Pro Team': 'LAL', 'GP': 1},
+        # Listed by ESPN, never played (retired / yet to debut): no history expected.
+        {'Name': 'Zhou Qi', 'Pro Team': 'LAL', 'GP': 0},
+        {'Name': 'No Game', 'Pro Team': 'BOS', 'GP': 9},
     ])
     games = {'LAL': GameInfo(opponent='GSW', is_home=True)}
 
@@ -65,7 +69,7 @@ def _fake_inference(player_minutes: dict[int, float]):
 @pytest.mark.asyncio
 async def test_project_today_reuses_predictions_for_an_unchanged_slate():
     service = LiveProjectionService()
-    players_df = pd.DataFrame([
+    players_df = pl.DataFrame([
         {'Name': 'Player A', 'Pro Team': 'LAL'},
         {'Name': 'Player B', 'Pro Team': 'BOS'},
     ])
@@ -92,14 +96,14 @@ async def test_project_today_reuses_predictions_for_an_unchanged_slate():
         assert third['Player A']['stats']['pts'] == 18.0
 
         # So does a smaller slate.
-        await service.project_today(players_df.iloc[:1], games)
+        await service.project_today(players_df.head(1), games)
         assert inference.predict_many.call_count == 3
 
 
 @pytest.mark.asyncio
 async def test_project_today_does_not_reuse_predictions_across_stores():
     service = LiveProjectionService()
-    players_df = pd.DataFrame([{'Name': 'Player A', 'Pro Team': 'LAL'}])
+    players_df = pl.DataFrame([{'Name': 'Player A', 'Pro Team': 'LAL'}])
     games = {'LAL': GameInfo(opponent='BOS', is_home=True)}
     old, new = _fake_inference({1: 30.0}), _fake_inference({1: 30.0})
 

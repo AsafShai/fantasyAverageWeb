@@ -189,10 +189,10 @@ class TodayService:
         Rankings table: between the two latest stored scoring periods, or,
         while tonight is live, tonight against this morning's official
         standings (plan decision 7). With LIVE_STANDINGS_ENABLED off the
-        response is exactly as before. ``settled`` always uses the stored
-        periods, which is what the daily recap wants after the nightly run."""
+        response is exactly as before. ``settled`` is the daily recap's: the
+        moves of the night the nightly job recorded (_settled_rank_changes)."""
         if settled:
-            return await self._stored_rank_changes(mode)
+            return await self._settled_rank_changes(mode)
         provider = DataProvider()
         state = await provider.get_live_state(include_finals=True)
         if state is not None and state.active:
@@ -202,6 +202,38 @@ class TodayService:
             # Labelled "tonight" by the block, so no block on last night's moves.
             return await self._stored_rank_changes(mode)
         return with_live(await self._stored_rank_changes(mode), state)
+
+    async def _settled_rank_changes(self, mode: str) -> RankChanges:
+        """The moves of the newest night in the nightly ledger: the daily
+        recap's night, never a slate in progress.
+
+        Stored periods once ESPN has rolled that night over. Before then the
+        stored periods end the night before, so while the live overlay is that
+        night with every game final, its moves come from it (official
+        standings through the night before against the same plus the night);
+        and in the minutes after the rollover, before anything wrote the new
+        snapshot, the snapshot is synced first. Failing both it is the stored
+        periods, as before."""
+        provider = DataProvider()
+        night = None
+        try:
+            run = await self.db_service.get_latest_model_nightly_run()
+            night = run.get('game_date') if run else None
+            if isinstance(night, str):
+                night = date.fromisoformat(night)
+        except Exception as e:
+            logger.warning(f"Settled rank changes: nightly ledger unavailable: {type(e).__name__}: {e}")
+        if night is not None:
+            state = await provider.get_live_state(include_finals=True)
+            if tonight_changes.is_finished_night(state, night):
+                moves = await tonight_changes.tonight_rank_changes(provider, mode, state.period)
+                if moves is not None:
+                    return moves
+        changes = await self._stored_rank_changes(mode)
+        if night is not None and (changes.latest_period or 0) < tonight_changes.period_of(night):
+            if await provider.sync_db_now():
+                changes = await self._stored_rank_changes(mode)
+        return changes
 
     async def _stored_rank_changes(self, mode: str) -> RankChanges:
         table = 'team_rankings_totals' if mode == 'totals' else 'team_rankings_averages'
@@ -313,11 +345,11 @@ class TodayService:
         vanishing. Counts themselves are still only over rostered players who
         have a game tonight; a player whose NBA team is idle is in no column
         at all, so the five counts sum to games_tonight."""
-        if players_df is None or players_df.empty:
+        if players_df is None or players_df.is_empty():
             return []
 
         accumulators: dict[int, dict] = {}
-        for _, row in players_df.iterrows():
+        for row in players_df.iter_rows(named=True):
             fantasy_name = row.get('fantasy_team_name')
             team_id = row.get('team_id')
             if not fantasy_name or team_id is None or int(team_id) <= 0:

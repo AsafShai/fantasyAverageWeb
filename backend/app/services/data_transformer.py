@@ -1,5 +1,6 @@
-import pandas as pd
 import logging
+
+import polars as pl
 from datetime import datetime, timezone
 from typing import Dict, Optional
 from app.utils.constants import (
@@ -10,6 +11,7 @@ from app.services.stats_calculator import StatsCalculator
 from app.config import settings
 from app.utils.roster_slots import SLOT_CAPS
 from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY, NON_RANKING_STAT_KEYS, UNSUPPORTED_CATEGORIES
+from app.utils.frames import dicts_frame
 
 
 # ESPN statSourceId: 0 = actual stats, 1 = projections.
@@ -19,7 +21,7 @@ SLOT_MAP = {0: 'PG', 1: 'SG', 2: 'SF', 3: 'PF', 4: 'C', 5: 'G', 6: 'F', 11: 'UTI
 
 
 class DataTransformer:
-    """Transforms raw ESPN data into clean pandas DataFrames"""
+    """Transforms raw ESPN data into clean Polars DataFrames"""
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
@@ -43,12 +45,30 @@ class DataTransformer:
         sources = [src for c in resolved for src in RATIO_CATEGORIES.get(c, ())]
         return list(dict.fromkeys(ALL_CATEGORIES + ['MIN'] + resolved + sources))
 
-    def _keep_stat_columns(self, df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
+    def _keep_stat_columns(self, df: pl.DataFrame, categories: list[str] = None) -> pl.DataFrame:
         """Drop stat columns outside `stat_columns_to_keep`, leaving non-stat
         columns (player/team identity, ratings, status) untouched."""
         keep = set(self.stat_columns_to_keep(categories))
         known_stats = set(ESPN_COLUMN_MAP.values())
-        return df[[c for c in df.columns if c not in known_stats or c in keep]]
+        return df.select([c for c in df.columns if c not in known_stats or c in keep])
+
+    @staticmethod
+    def _fill_missing_zero(df: pl.DataFrame) -> pl.DataFrame:
+        """pandas ``df[cols].fillna(0)`` for every column but player_id: a
+        missing number reads 0; a missing text value (fantasy_team_name of a
+        free agent) stays null — pandas put the int 0 there, and every reader
+        treats both as "no team"."""
+        exprs = []
+        for c, dtype in df.schema.items():
+            if c == 'player_id':
+                continue
+            if dtype.is_float():
+                exprs.append(pl.col(c).fill_nan(0.0).fill_null(0.0))
+            elif dtype.is_numeric():
+                exprs.append(pl.col(c).fill_null(0))
+            elif dtype == pl.Null:
+                exprs.append(pl.lit(0).alias(c))
+        return df.with_columns(exprs) if exprs else df
 
     def resolve_ranking_categories(self, espn_data: Dict) -> list[str]:
         """Determine this league's actual scoring categories from ESPN's
@@ -174,7 +194,7 @@ class DataTransformer:
         return result
 
     def raw_all_players_to_df(self, espn_data: Dict, stat_split_type_id: int = 0, fantasy_team_map: Dict[int, str] = None,
-                              categories: list[str] = None) -> pd.DataFrame:
+                              categories: list[str] = None) -> pl.DataFrame:
         """
         Convert ESPN kona_player_info API data to DataFrame (all 500 players including FA/waivers)
         Args:
@@ -256,10 +276,9 @@ class DataTransformer:
             if not all_players:
                 raise ValueError("No valid player data found")
 
-            df = pd.DataFrame(all_players)
+            df = dicts_frame(all_players)
             # Keep player_id nulls intact (fillna(0) would create bogus /player/0 links).
-            fill_cols = [c for c in df.columns if c != 'player_id']
-            df[fill_cols] = df[fill_cols].fillna(0)
+            df = self._fill_missing_zero(df)
             return self._organize_player_columns(self._keep_stat_columns(df, categories))
 
         except Exception as e:
@@ -267,7 +286,7 @@ class DataTransformer:
             raise Exception("Error transforming ESPN players data to DataFrame")
 
     def raw_players_to_df(self, espn_players_data: Dict, stat_split_type_id: int = 0,
-                          categories: list[str] = None) -> pd.DataFrame:
+                          categories: list[str] = None) -> pl.DataFrame:
         """
         Convert raw ESPN API players data to DataFrame
         Args:
@@ -292,9 +311,7 @@ class DataTransformer:
             
             if not all_players:
                 raise ValueError("No valid player data found")
-            df = pd.DataFrame(all_players)
-            fill_cols = [c for c in df.columns if c != 'player_id']
-            df[fill_cols] = df[fill_cols].fillna(0)
+            df = self._fill_missing_zero(dicts_frame(all_players))
             return self._organize_player_columns(self._keep_stat_columns(df, categories))
             
         except Exception as e:
@@ -324,7 +341,7 @@ class DataTransformer:
             if 'id' in team
         }
 
-    def raw_standings_to_totals_df(self, espn_standings_data: Dict, categories: list[str] = None) -> pd.DataFrame:
+    def raw_standings_to_totals_df(self, espn_standings_data: Dict, categories: list[str] = None) -> pl.DataFrame:
         """
         Convert raw ESPN API standings data to totals DataFrame
         Args:
@@ -357,14 +374,14 @@ class DataTransformer:
             if not teams_data:
                 raise ValueError("No valid team data found")
                 
-            df = pd.DataFrame(teams_data)
+            df = dicts_frame(teams_data)
             return self._transform_standings_dataframe(df, categories)
             
         except Exception as e:
             self.logger.error(f"Error transforming ESPN standings data to totals DataFrame: {e}")
             raise Exception("Error transforming ESPN standings data to totals DataFrame")
     
-    def totals_to_averages_df(self, totals_df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
+    def totals_to_averages_df(self, totals_df: pl.DataFrame, categories: list[str] = None) -> pl.DataFrame:
         """
         Calculate per-game averages from totals DataFrame
         Args:
@@ -375,7 +392,7 @@ class DataTransformer:
         """
         return self.stats_calculator.calculate_per_game_averages(totals_df, categories)
     
-    def averages_to_rankings_df(self, averages_df: pd.DataFrame, reverse_categories: set = None) -> pd.DataFrame:
+    def averages_to_rankings_df(self, averages_df: pl.DataFrame, reverse_categories: set = None) -> pl.DataFrame:
         """
         Calculate rankings from averages DataFrame
         Args:
@@ -436,14 +453,14 @@ class DataTransformer:
             self.logger.warning(f"Error extracting player stats: {e}")
             return {}
     
-    def _organize_player_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+    def _organize_player_columns(self, df: pl.DataFrame) -> pl.DataFrame:
         """Organize player DataFrame columns in logical order"""
         info_cols = ['Name', 'player_id', 'team_id', 'Pro Team', 'Positions', 'status', 'injured', 'fantasy_team_name', 'season_rating', 'last7_rating', 'last15_rating', 'last30_rating']
         stat_cols = [col for col in df.columns if col not in info_cols]
         available_info_cols = [col for col in info_cols if col in df.columns]
-        return df.reindex(columns=available_info_cols + stat_cols)
+        return df.select(available_info_cols + stat_cols)
     
-    def _transform_standings_dataframe(self, df: pd.DataFrame, categories: list[str] = None) -> pd.DataFrame:
+    def _transform_standings_dataframe(self, df: pl.DataFrame, categories: list[str] = None) -> pl.DataFrame:
         """
         Transform raw DataFrame with proper column names and types
         Args:
@@ -455,7 +472,7 @@ class DataTransformer:
             Clean DataFrame with proper structure
         """
         # Apply column mapping
-        df = df.rename(columns=ESPN_COLUMN_MAP)
+        df = df.rename({c: ESPN_COLUMN_MAP[c] for c in df.columns if c in ESPN_COLUMN_MAP})
 
         # Select only required columns (always the fixed default set, plus any
         # extra resolved categories beyond it)
@@ -464,12 +481,10 @@ class DataTransformer:
         # cumulative rate, so its sources have to survive column selection too.
         wanted = [c for c in self.stat_columns_to_keep(categories) if c != 'MIN']
         available_cols = ['team_id', 'team_name'] + [col for col in wanted if col in df.columns]
-        df = df[available_cols]
-        
+        df = df.select(available_cols)
+
         # Convert integer columns
         int_cols = [col for col in INTEGER_COLUMNS if col in df.columns]
-        df[int_cols] = df[int_cols].astype(int)
-        
-        return df
+        return df.with_columns([pl.col(c).cast(pl.Int64) for c in int_cols])
 
     

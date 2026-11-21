@@ -1,3 +1,4 @@
+import asyncio
 import json
 import time
 from datetime import date, datetime, timezone
@@ -10,6 +11,15 @@ import pytest
 from app.exceptions import DataSourceError
 from app.models.activity_models import ActivityTeam
 from app.services import league_activity_service as las
+from app.utils import background_tasks
+
+
+async def refreshed(svc):
+    """A due refresh runs behind the response that serves the last feed;
+    this lets it finish and returns what the next request sees."""
+    await svc.get_activity()
+    await asyncio.gather(*list(background_tasks._tasks))
+    return await svc.get_activity()
 from app.services.league_activity_service import (
     GameLine,
     LeagueActivityService,
@@ -357,13 +367,13 @@ class TestServiceCaching:
         await svc.get_activity()
         calls.clear()
         las._cache.cards_at -= las.CARDS_TTL_SECONDS + 1
-        await svc.get_activity()
+        await refreshed(svc)
         assert sorted(calls) == ['cards', 'mSettings']  # stats and schedule still fresh
 
         calls.clear()
         las._cache.stats_at -= las.STATS_TTL_SECONDS + 1
         las._cache.schedule_at -= las.SCHEDULE_TTL_SECONDS + 1
-        await svc.get_activity()
+        await refreshed(svc)
         assert sorted(calls) == ['proTeamSchedules_wl', 'stats']
 
     @pytest.mark.asyncio
@@ -466,7 +476,7 @@ class TestConditionalRefresh:
         sent.clear()
         state['unchanged'] = True
         self.expire_all()
-        second = await svc.get_activity()
+        second = await refreshed(svc)
         assert second.model_dump(exclude={'last_updated'}) == first.model_dump(exclude={'last_updated'})
         assert second.last_updated >= first.last_updated
         assert await svc.get_activity() is second  # no new check, no new copy
@@ -479,9 +489,32 @@ class TestConditionalRefresh:
         svc, sent, state = self.service()
         first = await svc.get_activity()
         self.expire_all()
-        second = await svc.get_activity()  # every source answers 200 again
+        second = await refreshed(svc)  # every source answers 200 again
         assert second is not first
         assert second.model_dump(exclude={'last_updated'}) == first.model_dump(exclude={'last_updated'})
+
+    @pytest.mark.asyncio
+    async def test_due_refresh_serves_last_feed_without_waiting_on_espn(self):
+        svc, sent, state = self.service()
+        first = await svc.get_activity()
+        sent.clear()
+        self.expire_all()
+        served = await svc.get_activity()
+        assert served is first
+        assert sent == []  # nothing asked of ESPN before the response
+        again = await svc.get_activity()  # refresh pending: no second one
+        assert again is first
+        await asyncio.gather(*list(background_tasks._tasks))
+        assert sorted(k for k, _ in sent) == ['cards', 'mSettings', 'proTeamSchedules_wl', 'stats']
+
+    @pytest.mark.asyncio
+    async def test_feed_unchecked_for_long_refreshes_in_foreground(self):
+        svc, sent, state = self.service()
+        first = await svc.get_activity()
+        las._cache.cards_at -= las.STALE_SERVE_SECONDS + 1
+        las._cache.stats_at -= las.STALE_SERVE_SECONDS + 1
+        second = await svc.get_activity()  # every source answers 200 again
+        assert second is not first
 
     @pytest.mark.asyncio
     async def test_failed_stats_round_drops_its_etags(self):
@@ -497,7 +530,7 @@ class TestConditionalRefresh:
 
         svc._client.get.side_effect = failing
         with patch.object(las.asyncio, 'sleep', new=AsyncMock()):
-            await svc.get_activity()  # serves the last good result
+            await refreshed(svc)  # serves the last good result
         assert not any(k[0] == 'stats' for k in las._cache.etags if isinstance(k, tuple))
 
     @pytest.mark.asyncio
@@ -508,7 +541,7 @@ class TestConditionalRefresh:
         las._cache.pool_ids = [11]  # the card list moved: the batch is now (10, 11)
         las._cache.cards_at = las._cache.schedule_at = time.monotonic()
         las._cache.stats_at -= las.STATS_TTL_SECONDS + 1
-        await svc.get_activity()
+        await refreshed(svc)
         assert [k for k in las._cache.etags if isinstance(k, tuple)] == [('stats', (10, 11))]
 
 

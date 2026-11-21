@@ -1,3 +1,4 @@
+import polars as pl
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
@@ -66,14 +67,15 @@ async def test_get_nba_avg_pace_falls_back_on_exception(estimator_service, monke
 def _stub_run_inputs(svc, monkeypatch, estimate):
     """Everything around the Monte Carlo stubbed; `estimate` stands in for it."""
     import pandas as pd
+    import polars as pl
     svc.db_service = MagicMock()
     svc.db_service.get_latest_snapshot_date = AsyncMock(return_value=date(2026, 1, 1))
     svc.db_service.get_estimator_as_of = AsyncMock(return_value=None)
     for name in ("upsert_estimator_prediction", "upsert_estimator_ranking", "upsert_estimator_rank_probability"):
         setattr(svc.db_service, name, AsyncMock())
-    monkeypatch.setattr(svc, "_get_snapshot_df", AsyncMock(return_value=pd.DataFrame({"x": [1]})))
+    monkeypatch.setattr(svc, "_get_snapshot_df", AsyncMock(return_value=pl.DataFrame({"x": [1]})))
     monkeypatch.setattr(svc, "_get_nba_avg_pace", AsyncMock(return_value=60.0))
-    monkeypatch.setattr(estimator_service_module, "get_team_slot_pace_df", AsyncMock(return_value=pd.DataFrame()))
+    monkeypatch.setattr(estimator_service_module, "get_team_slot_pace_df", AsyncMock(return_value=pl.DataFrame()))
     fake_est = MagicMock()
     fake_est.return_value.estimate.side_effect = estimate
     monkeypatch.setattr("app.fantsy_estimator.FantasyEstimator", fake_est)
@@ -84,7 +86,7 @@ def _estimate_result(*_args):
     import pandas as pd
     import time
     time.sleep(0.05)  # long enough for concurrent callers to overlap
-    frame = pd.DataFrame({"team_id": [1]})
+    frame = pl.DataFrame({"team_id": [1]})
     return frame, frame, frame
 
 
@@ -162,9 +164,51 @@ async def test_skips_without_snapshot(estimator_service, monkeypatch):
     assert fake_est.return_value.estimate.call_count == 0
 
 
-def test_scheduler_and_service_share_one_timezone():
-    from app.services import estimator_scheduler
-    assert estimator_scheduler.ISRAEL_TZ is estimator_service_module.ISRAEL_TZ
+class TestEstimatorSlots:
+    """The estimator follows ESPN's rollover, which runs on New York time
+    (~03:00 ET in the Nov 2026 logs), so its slots are New York times."""
+
+    def _next(self, *args):
+        from datetime import datetime
+        from app.services import estimator_scheduler as es
+        return es._compute_next_trigger(datetime(*args, tzinfo=es.EASTERN))
+
+    def test_slots_are_every_fifteen_minutes_from_0230_to_0500_et(self):
+        from app.services import estimator_scheduler as es
+        assert es.SCHEDULE_TIMES[0] == (2, 30) and es.SCHEDULE_TIMES[-1] == (5, 0)
+        minutes = [h * 60 + m for h, m in es.SCHEDULE_TIMES]
+        assert all(b - a == 15 for a, b in zip(minutes, minutes[1:]))
+
+    def test_next_slot_within_the_window(self):
+        assert self._next(2026, 11, 20, 3, 7).strftime('%H:%M') == '03:15'
+        assert self._next(2026, 11, 20, 3, 15).strftime('%H:%M') == '03:30'   # strictly after
+
+    def test_after_the_window_it_is_tomorrow_morning(self):
+        nxt = self._next(2026, 11, 20, 5, 0)
+        assert (nxt.day, nxt.strftime('%H:%M')) == (21, '02:30')
+        nxt = self._next(2026, 11, 20, 23, 59)
+        assert (nxt.day, nxt.strftime('%H:%M')) == (21, '02:30')
+
+    def test_slots_cover_the_observed_rollovers_in_israel_time(self):
+        """The window spans 09:30-12:00 Israel in winter; ESPN rolled over
+        between ~09:15 and 10:45 Israel on every morning checked."""
+        from app.services import estimator_scheduler as es
+        first = self._next(2026, 11, 20, 0, 0)
+        assert first.astimezone(es.ISRAEL_TZ).strftime('%H:%M') == '09:30'
+
+    def test_slots_follow_new_york_through_its_clock_change(self):
+        from datetime import timezone
+        before = self._next(2026, 10, 31, 12, 0)    # Nov 1 02:30: EDT, clocks go back at 02:00 -> EST
+        assert before.strftime('%H:%M') == '02:30' and before.utcoffset().total_seconds() == -5 * 3600
+        after = self._next(2026, 11, 1, 12, 0)
+        assert after.astimezone(timezone.utc).strftime('%H:%M') == '07:30'
+
+    def test_any_timezone_in_is_read_as_new_york(self):
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+        from app.services import estimator_scheduler as es
+        israel = datetime(2026, 11, 20, 10, 0, tzinfo=ZoneInfo('Asia/Jerusalem'))   # 03:00 ET
+        assert es._compute_next_trigger(israel).strftime('%H:%M') == '03:15'
 
 
 @pytest.mark.asyncio
@@ -205,7 +249,7 @@ async def test_warmup_status_counts_the_slowest_teams_game_days(estimator_servic
     needed = FantasyEstimator().periods_needed
 
     import pandas as pd
-    one_ready_one_not = pd.concat([make_snapshot(1, 30), make_snapshot(2, 6)], ignore_index=True)
+    one_ready_one_not = pl.from_pandas(pd.concat([make_snapshot(1, 30), make_snapshot(2, 6)], ignore_index=True))
     monkeypatch.setattr(estimator_service, "_get_snapshot_df", AsyncMock(return_value=one_ready_one_not))
     played, need = await estimator_service.warmup_status()
     assert need == needed and 0 < played < needed                   # the slowest team, not the furthest

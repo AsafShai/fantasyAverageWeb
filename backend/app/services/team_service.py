@@ -3,7 +3,7 @@ import logging
 from datetime import date, datetime
 from typing import List, Mapping, Optional
 
-import pandas as pd
+import polars as pl
 
 from app.models import TeamTonight, TeamDetail, TeamPlayers, Team, TeamRosterPlayer, StatTimePeriod, with_live
 from app.exceptions import InvalidParameterError, ResourceNotFoundError, DataSourceError
@@ -13,17 +13,17 @@ from app.builders.response_builder import ResponseBuilder
 from app.utils.utils import is_team_exists
 from app.config import settings
 
-def _team_value(df: Optional[pd.DataFrame], team_id: int, column: str) -> Optional[float]:
+def _team_value(df: Optional[pl.DataFrame], team_id: int, column: str) -> Optional[float]:
     if df is None or column not in df.columns or 'team_id' not in df.columns:
         return None
-    rows = df.loc[df['team_id'] == team_id, column]
-    return float(rows.iloc[0]) if not rows.empty else None
+    rows = df.filter(pl.col('team_id') == team_id)[column]
+    return float(rows[0]) if len(rows) else None
 
 
 def team_tonight(
     team_id: int,
-    official: tuple[pd.DataFrame, pd.DataFrame],
-    live: tuple[pd.DataFrame, pd.DataFrame],
+    official: tuple[pl.DataFrame, pl.DataFrame],
+    live: tuple[pl.DataFrame, pl.DataFrame],
     official_slots: Mapping[str, int],
     live_slots: Mapping[str, int],
     starters_live: int,
@@ -184,7 +184,7 @@ class TeamService:
 
         team_players = self._filter_team_players(players_df, team_id)
 
-        if team_players.empty:
+        if team_players.is_empty():
             # A valid team with no roster yet (e.g. pre-draft) is a real, empty
             # state — not a lookup failure. team_id validity is already checked
             # by the caller via is_team_exists.
@@ -209,11 +209,11 @@ class TeamService:
     def _extract_teams_from_dataframe(self, totals_df) -> List[Team]:
         """Extract teams list from dataframe with validation"""
         teams = []
-        for team_id, team_name in zip(totals_df['team_id'], totals_df['team_name']):
+        for team_id, team_name in zip(totals_df['team_id'].to_list(), totals_df['team_name'].to_list()):
             if team_id and team_name:
                 teams.append(Team(team_id=int(team_id), team_name=str(team_name).strip()))
         return teams
     
     def _filter_team_players(self, players_df, team_id: int):
         """Filter players for a specific team"""
-        return players_df.loc[players_df['team_id'] == team_id]
+        return players_df.filter(pl.col('team_id') == team_id)

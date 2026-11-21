@@ -12,12 +12,14 @@ from types import SimpleNamespace
 import joblib
 import numpy as np
 import pandas as pd
+import polars as pl
 import pytest
 from sklearn.metrics import mean_squared_error
 
 from model_stats_inference.research import config as rconfig
 from model_stats_inference.research import data as rdata
 from model_stats_inference.research import features as rfeatures
+from model_stats_inference.serving import featurize
 from model_stats_inference.serving.feature_store import FeatureStore
 from model_stats_inference.training import config as tconfig
 from model_stats_inference.training.reconcile import build_reconciler
@@ -89,6 +91,21 @@ def _make_team_logs(rng) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def to_pl(df: pd.DataFrame) -> pl.DataFrame:
+    """A pandas test frame as the Polars frame the serving code takes
+    (GAME_DATE as pl.Date). Training/research fixtures stay pandas."""
+    def values(col):
+        vals = df[col].tolist()
+        if pd.api.types.is_numeric_dtype(df[col].dtype) or pd.api.types.is_datetime64_any_dtype(df[col].dtype):
+            return vals
+        return [None if isinstance(v, float) and v != v else v for v in vals]   # NaN -> null in text columns
+
+    out = pl.from_dict({c: values(c) for c in df.columns})
+    if "GAME_DATE" in out.columns:
+        out = out.with_columns(pl.col("GAME_DATE").cast(pl.Date))
+    return out
+
+
 @pytest.fixture(scope="module")
 def raw_players() -> pd.DataFrame:
     return _make_players(np.random.default_rng(0))
@@ -105,13 +122,14 @@ def team_tables(team_logs):
 
 
 @pytest.fixture
-def store(raw_players, team_tables) -> FeatureStore:
+def store(raw_players, team_logs) -> FeatureStore:
     # Function-scoped: test_feature_store.py's test_nightly_update_appends_and_recomputes
     # mutates the store in place via update_with_nightly_results, so it can't be
     # shared across tests. Cheap to rebuild (no training) -- unlike feature_matrix
     # / models_dir below, which stay module-scoped for the real time savings.
-    team_allowed, team_own = team_tables
-    return FeatureStore.build(raw_players, team_allowed, team_own)
+    logs = to_pl(team_logs)
+    return FeatureStore.build(
+        to_pl(raw_players), featurize.build_team_allowed(logs), featurize.build_team_own(logs))
 
 
 @pytest.fixture(scope="module")
@@ -151,4 +169,7 @@ def models_dir(feature_matrix, tmp_path_factory):
             oof_true=y.to_numpy(), oof_pred=pred, oof_index=y.index.to_numpy())
 
     joblib.dump(build_reconciler(pseudo), out / "reconciler.joblib")
+    # Serving reads the compiled twins (no scikit-learn in production).
+    from model_stats_inference.serving.compiled_model import compile_models
+    compile_models(out)
     return out

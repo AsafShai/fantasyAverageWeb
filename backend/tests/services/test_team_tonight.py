@@ -1,16 +1,17 @@
 """``tonight`` on the team detail: GP and points added tonight, games per
 slot and starters playing now (plan section 7 step 3; Team page artboard)."""
 import pandas as pd
+import polars as pl
 
 from app.services.team_service import team_tonight
 
 
 def _avg(gp):
-    return pd.DataFrame({'team_id': [1, 2], 'GP': [gp, 90]})
+    return pl.DataFrame({'team_id': [1, 2], 'GP': [gp, 90]})
 
 
 def _rank(points):
-    return pd.DataFrame({'team_id': [1, 2], 'TOTAL_POINTS': [points, 50.0]})
+    return pl.DataFrame({'team_id': [1, 2], 'TOTAL_POINTS': [points, 50.0]})
 
 
 def test_deltas_against_the_official_frames():
@@ -33,7 +34,7 @@ def test_nothing_tonight_is_all_zero():
 
 
 def test_missing_team_or_columns_gives_zero_not_an_error():
-    empty = pd.DataFrame({'team_id': []})
+    empty = pl.DataFrame({'team_id': []})
     tonight = team_tonight(1, official=(empty, empty), live=(_avg(104), _rank(36.0)),
                            official_slots={}, live_slots={'PG': 1}, starters_live=1)
     assert tonight.gp == 0 and tonight.points == 0 and tonight.slots == {'PG': 1}

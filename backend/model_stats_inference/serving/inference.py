@@ -10,12 +10,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import joblib
+from datetime import date, datetime
+
 import numpy as np
-import pandas as pd
 
 from . import config
 from .errors import InsufficientHistoryError, ModelsNotTrainedError, UnknownPlayerError
+from .compiled_model import COMPILED_SUFFIX, load_compiled_payload, stale_compiled_models
 from .feature_store import FeatureStore
 from .reconcile import Reconciler
 
@@ -38,7 +39,7 @@ class PredictionRequest:
     player_id: int
     opponent_team_id: int
     is_home: bool
-    game_date: str | pd.Timestamp
+    game_date: str | date | datetime
     minutes: float  # t — expected minutes the player will play
 
 
@@ -64,10 +65,16 @@ class LiveInference:
         self._rate_keys: list[tuple[str, str]] | None = None
         self.models: dict[str, dict] = {}
         d = models_dir or config.MODELS_DIR
-        for path in sorted(Path(d).glob("*.joblib")):
-            if path.name == "reconciler.joblib":
-                continue
-            payload = joblib.load(path)
+        # The compiled twins of the trained .joblib models: same predictions bit
+        # for bit, without importing scikit-learn/SciPy (see compiled_model.py).
+        stale = stale_compiled_models(Path(d))
+        if stale:
+            raise ModelsNotTrainedError(
+                f"compiled models missing or out of date for {stale} in {d} — "
+                "run `python scripts/compile_models.py`"
+            )
+        for path in sorted(Path(d).glob(f"*{COMPILED_SUFFIX}")):
+            payload = load_compiled_payload(path)
             self.models[payload["target"]] = payload
         # Learned color scale (spread of the Pearson residual) per target, if present.
         self.resid_sigma: dict[str, float] = {
@@ -94,9 +101,9 @@ class LiveInference:
     ) -> tuple[list[PredictionResult | None], list[Exception | None]]:
         """Vectorized prediction for many requests at once.
 
-        Assembles every eligible request into a single DataFrame and calls each
-        model's ``.predict`` once over the whole batch — instead of one DataFrame
-        build plus ~N model calls *per player*. The per-row overhead (DataFrame
+        Assembles every eligible request into one float64 matrix per model and
+        calls each model's ``.predict`` once over the whole batch — instead of
+        one row build plus ~N model calls *per player*. The per-row overhead (DataFrame
         construction + sklearn input validation) dominates single-row predicts, so
         batching is several times faster for a full slate while producing identical
         numbers. Results are aligned to ``reqs``; an ineligible/unknown player gets
@@ -122,21 +129,18 @@ class LiveInference:
         if not valid:
             return results, errors
 
-        X = pd.DataFrame(rows)
         # One predict call per model over the whole batch (vs ~N per player).
         batched: dict[str, np.ndarray] = {}
+        nan = float("nan")
         for target, payload in self.models.items():
-            # reindex (not X[...]) so a model deployed with features the stored
+            # .get (not [...]) so a model deployed with features the stored
             # vectors don't carry yet degrades to NaN (HGB-native) instead of
             # KeyError-ing the whole batch — vectors self-heal on the next
             # nightly re-materialization.
             feats = payload["features"]
-            # Hand sklearn a consolidated float64 block: check_array on the
-            # column-fragmented reindex result costs ~10x the tree traversal.
-            Xm = pd.DataFrame(
-                np.ascontiguousarray(X.reindex(columns=feats).to_numpy(dtype=np.float64)),
-                columns=feats,
-            )
+            # One float64 block, columns in the model's order.
+            Xm = np.array([[row.get(f, nan) for f in feats] for row in rows], dtype=np.float64)
+            Xm = np.ascontiguousarray(Xm.reshape(len(rows), len(feats)))
             vals = payload["model"].predict(Xm)
             if payload.get("clip_at_zero", True):
                 vals = np.clip(vals, 0.0, None)
@@ -173,8 +177,9 @@ class LiveInference:
     # --- feature-row assembly ---------------------------------------------
 
     def _assemble_row(self, state, own, opp, req: PredictionRequest) -> dict:
-        game_date = pd.Timestamp(req.game_date)
-        rest = (game_date - pd.Timestamp(state.last_game_date)).days
+        game_date = _as_date(req.game_date)
+        last = state.last_game_date
+        rest = (game_date - _as_date(last)).days if last is not None else float("nan")
 
         row: dict[str, float] = {}
         row.update(state.features)        # player history mean/var/rate + efficiency
@@ -199,6 +204,15 @@ class LiveInference:
         for key, t_key in self._rate_keys:
             row[t_key] = t * row[key]
         return row
+
+
+def _as_date(d) -> date:
+    """A game date given as date, datetime (incl. pandas Timestamp) or ISO string."""
+    if isinstance(d, datetime):
+        return d.date()
+    if isinstance(d, date):
+        return d
+    return date.fromisoformat(str(d)[:10])
 
 
 def _safe_ratio(num: float | None, den: float | None) -> float:

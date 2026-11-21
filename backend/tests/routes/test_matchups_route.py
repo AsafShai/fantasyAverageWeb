@@ -1,5 +1,6 @@
 import pytest
 import pandas as pd
+import polars as pl
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 
@@ -22,7 +23,7 @@ _MOCK_GAMES = {
     'LAL': GameInfo(opponent='CHA', is_home=True),
     'CHA': GameInfo(opponent='LAL', is_home=False),
 }
-_MOCK_PLAYERS = pd.DataFrame([
+_MOCK_PLAYERS = pl.DataFrame([
     {'Name': 'Anthony Davis', 'Pro Team': 'LAL', 'Positions': 'C', 'status': 'ONTEAM', 'team_id': 1},
     {'Name': 'Player Off', 'Pro Team': 'BOS', 'Positions': 'PG', 'status': 'ONTEAM', 'team_id': 2},
 ])
@@ -69,6 +70,23 @@ def test_returns_only_players_with_games(mock_services):
     # Only LAL (Anthony Davis) has a game; BOS has no game in mock
     assert len(data) == 1
     assert data[0]['player_name'] == 'Anthony Davis'
+
+
+@pytest.mark.parametrize('chart, sent', [
+    ({'LAL': {'anthonydavis'}}, ['Anthony Davis']),            # a retired listing is dropped
+    ({'LAL': set()}, ['Anthony Davis', 'Retired Listing']),    # an empty chart (failed fetch) proves nothing
+])
+def test_retired_listings_dropped_only_against_a_real_depth_chart(mock_services, monkeypatch, chart, sent):
+    _, provider = mock_services
+    provider.get_players_df = AsyncMock(return_value=pl.DataFrame([
+        {'Name': 'Anthony Davis', 'Pro Team': 'LAL', 'Positions': 'C', 'status': 'ONTEAM', 'team_id': 1, 'GP': 0},
+        {'Name': 'Retired Listing', 'Pro Team': 'LAL', 'Positions': 'PG', 'status': 'FREEAGENT', 'team_id': 0, 'GP': 0},
+    ]))
+    depth_chart_svc = MagicMock()
+    depth_chart_svc.get_on_depth_chart_names = AsyncMock(return_value=chart)
+    monkeypatch.setattr('app.routes.matchups._depth_chart_service', depth_chart_svc)
+    data = TestClient(app).get('/api/matchups/today').json()
+    assert [p['player_name'] for p in data] == sent
 
 
 def test_response_shape(mock_services):
@@ -407,3 +425,20 @@ async def test_foreground_build_started_before_nightly_invalidation_is_not_cache
 
     assert served  # the caller still gets its slate
     assert 'today' not in matchups_route._response_cache
+
+
+class TestInactiveListing:
+    """ESPN keeps retired players under their last NBA team; they are not sent."""
+
+    def test_unowned_never_played_off_depth_chart_is_inactive(self):
+        assert matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 0}, on_depth_chart=False)
+
+    def test_depth_chart_player_is_kept_even_without_games(self):
+        # e.g. an injured rookie yet to debut, still listed by his team
+        assert not matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 0}, on_depth_chart=True)
+
+    def test_rostered_player_is_kept(self):
+        assert not matchups_route._inactive_listing({'status': 'ONTEAM', 'GP': 0}, on_depth_chart=False)
+
+    def test_free_agent_who_played_is_kept(self):
+        assert not matchups_route._inactive_listing({'status': 'FREEAGENT', 'GP': 3}, on_depth_chart=False)

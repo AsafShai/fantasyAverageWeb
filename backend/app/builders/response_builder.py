@@ -1,5 +1,7 @@
-import pandas as pd
+import math
 from datetime import datetime
+
+import polars as pl
 from typing import Any, Dict, List, Mapping, Optional, Union
 from app.models import (
     ShotChartStats, AverageStats, TeamAverageStats, RankingStats,
@@ -9,15 +11,28 @@ from app.models import (
 from app.services.data_transformer import SLOT_CAPS
 from app.utils.constants import RANKING_CATEGORIES
 from app.config import settings
+from app.utils import pdcompat
+
+
+def sort_frame(df: pl.DataFrame, column: str, ascending: bool) -> pl.DataFrame:
+    """df.sort_values(column, ascending=...) with pandas' order for ties."""
+    if column not in df.columns:
+        raise KeyError(column)
+    return df[pdcompat.argsort(df[column].to_numpy(), ascending=ascending)]
+
+
+def rows_by(df: pl.DataFrame, key: str) -> Dict[Any, dict]:
+    """df.set_index(key) for row lookups: key -> row dict (last one wins on a duplicate key)."""
+    return {row[key]: row for row in df.iter_rows(named=True)}
 
 
 class ResponseBuilder:
     """Transforms data into API response objects (pure data transformation)"""
     
-    def build_rankings_response(self, averages_df: pd.DataFrame,
-                              totals_df: pd.DataFrame,
-                              averages_rankings_df: pd.DataFrame,
-                              totals_rankings_df: pd.DataFrame,
+    def build_rankings_response(self, averages_df: pl.DataFrame,
+                              totals_df: pl.DataFrame,
+                              averages_rankings_df: pl.DataFrame,
+                              totals_rankings_df: pl.DataFrame,
                               sort_by: Optional[str] = None,
                               order: str = "asc",
                               data_date=None,
@@ -35,19 +50,19 @@ class ResponseBuilder:
         sort_col = "RANK" if sort_by is None else sort_by.upper()
         ascending = order == "asc"
 
-        averages_rankings_df = averages_rankings_df.sort_values(sort_col, ascending=ascending)
-        totals_rankings_df = totals_rankings_df.sort_values(sort_col, ascending=ascending)
+        averages_rankings_df = sort_frame(averages_rankings_df, sort_col, ascending)
+        totals_rankings_df = sort_frame(totals_rankings_df, sort_col, ascending)
 
-        averages_by_team = averages_df.set_index('team_id')
-        totals_by_team = totals_df.set_index('team_id')
+        averages_by_team = rows_by(averages_df, 'team_id')
+        totals_by_team = rows_by(totals_df, 'team_id')
 
         averages_rankings = [
-            self._create_ranking_stats(row, averages_by_team.loc[int(row['team_id'])], categories)
-            for _, row in averages_rankings_df.iterrows()
+            self._create_ranking_stats(row, averages_by_team[int(row['team_id'])], categories)
+            for row in averages_rankings_df.iter_rows(named=True)
         ]
         totals_rankings = [
-            self._create_ranking_stats(row, totals_by_team.loc[int(row['team_id'])], categories)
-            for _, row in totals_rankings_df.iterrows()
+            self._create_ranking_stats(row, totals_by_team[int(row['team_id'])], categories)
+            for row in totals_rankings_df.iter_rows(named=True)
         ]
 
         return LeagueRankings(
@@ -62,25 +77,25 @@ class ResponseBuilder:
             actual_end_date=actual_end_date,
         )
     
-    def build_team_detail_response(self, team_id: int, totals_df: pd.DataFrame,
-                                 averages_df: pd.DataFrame, rankings_df: pd.DataFrame,
+    def build_team_detail_response(self, team_id: int, totals_df: pl.DataFrame,
+                                 averages_df: pl.DataFrame, rankings_df: pl.DataFrame,
                                  players: Optional[List[Player]], espn_url: str,
                                  slot_usage_raw: Dict[str, int] = None,
                                  data_date=None, actual_start=None, actual_end=None,
                                  categories: Optional[List[str]] = None) -> TeamDetail:
         """Build TeamDetail response for a specific team. categories defaults to RANKING_CATEGORIES."""
         categories = categories or RANKING_CATEGORIES
-        team_row = totals_df[totals_df['team_id'] == team_id]
-        if team_row.empty:
+        team_row = totals_df.filter(pl.col('team_id') == team_id)
+        if team_row.is_empty():
             raise ValueError(f"Team '{team_id}' not found")
-        totals_data = team_row.iloc[0]
+        totals_data = team_row.row(0, named=True)
 
-        avg_row = averages_df[averages_df['team_id'] == team_id]
-        if avg_row.empty:
+        avg_row = averages_df.filter(pl.col('team_id') == team_id)
+        if avg_row.is_empty():
             raise ValueError(f"Team '{team_id}' not found in averages")
-        avg_data = avg_row.iloc[0]
+        avg_data = avg_row.row(0, named=True)
 
-        rank_data = rankings_df[rankings_df['team_id'] == team_id].iloc[0]
+        rank_data = rankings_df.filter(pl.col('team_id') == team_id).row(0, named=True)
 
         team = Team(team_id=team_id, team_name=totals_data['team_name'])
         shot_chart = self._create_shot_chart_stats(totals_data)
@@ -181,9 +196,9 @@ class ResponseBuilder:
             data_date=data_date,
         )
     
-    def _player_id_from_row(self, row: Union[pd.Series, Mapping[str, Any]]) -> Optional[int]:
+    def _player_id_from_row(self, row: Mapping[str, Any]) -> Optional[int]:
         raw = row.get('player_id')
-        if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        if raw is None or (isinstance(raw, float) and math.isnan(raw)):
             return None
         try:
             value = int(raw)
@@ -191,7 +206,7 @@ class ResponseBuilder:
             return None
         return value if value > 0 else None
 
-    def _build_player_stats(self, row: Union[pd.Series, Mapping[str, Any]], categories: Optional[List[str]] = None) -> PlayerStats:
+    def _build_player_stats(self, row: Mapping[str, Any], categories: Optional[List[str]] = None) -> PlayerStats:
         """Create PlayerStats from a player row, with the generic `stats` dict
         populated for the league's actual scoring categories (e.g. TO) on top
         of the fixed default fields. categories defaults to RANKING_CATEGORIES."""
@@ -214,11 +229,11 @@ class ResponseBuilder:
             stats={col: float(row[col]) for col in categories if col in row},
         )
 
-    def build_players_list(self, team_players: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
+    def build_players_list(self, team_players: pl.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
         """Build list of Player objects from players DataFrame. categories defaults to RANKING_CATEGORIES."""
         columns = list(team_players.columns)
         players = []
-        for values in team_players.itertuples(index=False, name=None):
+        for values in team_players.iter_rows():
             row = dict(zip(columns, values))
             players.append(Player(
                 player_name=str(row['Name']),
@@ -232,17 +247,17 @@ class ResponseBuilder:
             ))
         return players
 
-    def build_team_players_response(self, team_players: pd.DataFrame) -> TeamPlayers:
+    def build_team_players_response(self, team_players: pl.DataFrame) -> TeamPlayers:
         """Build TeamPlayers response from players DataFrame"""
         players = self.build_players_list(team_players)
         return TeamPlayers(
-            team_id=team_players.iloc[0]['team_id'],
+            team_id=team_players.row(0, named=True)['team_id'],
             players=players,
             last_updated=datetime.now()
         )
     
     # Helper methods for data transformation
-    def create_ranking_stats_from_averages(self, team_data: pd.Series,
+    def create_ranking_stats_from_averages(self, team_data: Mapping[str, Any],
                                          categories: Optional[List[str]] = None) -> RankingStats:
         """Create RankingStats object from averages data. categories defaults to RANKING_CATEGORIES."""
         categories = categories or RANKING_CATEGORIES
@@ -278,7 +293,7 @@ class ResponseBuilder:
             stats={col: float(league_avg_data[col]) for col in categories if col in league_avg_data},
         )
     
-    def _create_ranking_stats(self, ranked_row: pd.Series, raw_row: pd.Series,
+    def _create_ranking_stats(self, ranked_row: Mapping[str, Any], raw_row: Mapping[str, Any],
                             categories: Optional[List[str]] = None) -> RankingStats:
         """Create RankingStats object from a ranked dataframe row (rank + total points, plus each
         category's rank-in-category) paired with the raw row holding the team's actual
@@ -301,7 +316,7 @@ class ResponseBuilder:
             stats={col: float(raw_row[col]) for col in categories if col in raw_row},
         )
     
-    def _create_shot_chart_stats(self, totals_data: pd.Series) -> ShotChartStats:
+    def _create_shot_chart_stats(self, totals_data: Mapping[str, Any]) -> ShotChartStats:
         """Create ShotChartStats object from totals data"""
         return ShotChartStats(
             team=Team(team_id=int(totals_data['team_id']), team_name=str(totals_data['team_name'])),
@@ -314,7 +329,7 @@ class ResponseBuilder:
             gp=int(totals_data['GP'])
         )
     
-    def _create_raw_average_stats(self, avg_data: pd.Series,
+    def _create_raw_average_stats(self, avg_data: Mapping[str, Any],
                                 categories: Optional[List[str]] = None) -> TeamAverageStats:
         """Create TeamAverageStats object from averages data. categories defaults to RANKING_CATEGORIES."""
         categories = categories or RANKING_CATEGORIES
@@ -332,11 +347,11 @@ class ResponseBuilder:
             stats={col: float(avg_data[col]) for col in categories if col in avg_data},
         )
 
-    def build_all_players_response(self, players_df: pd.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
+    def build_all_players_response(self, players_df: pl.DataFrame, categories: Optional[List[str]] = None) -> List[Player]:
         """Build list of all players from players DataFrame. categories defaults to RANKING_CATEGORIES."""
         columns = list(players_df.columns)
         players = []
-        for values in players_df.itertuples(index=False, name=None):
+        for values in players_df.iter_rows():
             row = dict(zip(columns, values))
             players.append(Player(
                 player_name=str(row['Name']),

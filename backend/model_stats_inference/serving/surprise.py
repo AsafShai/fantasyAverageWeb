@@ -1,5 +1,11 @@
 """Surprises of the night: how unexpected each player's line was.
 
+This is the web process's (pandas-free) implementation: frames are Polars,
+the arithmetic is the same NumPy operations in the same order as the pandas
+original in research/surprise_pandas.py (which the offline backtest and
+scripts/build_surprise_calibration.py use), so the scores are bit-identical;
+test_surprise_parity.py pins that.
+
 Two ingredients per player-game, both standardized against a reference season
 (``surprise_calibration.json``, built by scripts/build_surprise_calibration.py
 from the walk-forward research parquet) so a night's scores are comparable
@@ -48,12 +54,13 @@ them means re-training the calibration (scripts/build_surprise_calibration.py).
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 import numpy as np
-import pandas as pd
-from scipy.stats import norm
+import polars as pl
+from . import kernels
+from .normal import ppf as norm_ppf  # == scipy.stats.norm.ppf, bit for bit; no SciPy in production
 
 # --- Frozen research settings -------------------------------------------------
 
@@ -181,235 +188,167 @@ REASON_ERR_COLUMN = {
 }
 
 
-def add_efficiency(df: pd.DataFrame) -> pd.DataFrame:
+
+
+# --- column helpers (pandas semantics on NumPy arrays) ---------------------------
+
+def _f(df: pl.DataFrame, col: str) -> np.ndarray:
+    """A column as float64 with nulls as NaN (what pandas' astype(float) gives)."""
+    s = df.get_column(col)
+    if s.dtype == pl.Boolean:
+        s = s.cast(pl.Float64)
+    return s.cast(pl.Float64).fill_null(float("nan")).to_numpy().astype(np.float64, copy=False)
+
+
+def _clip_lower(x, lower: float):
+    """Series.clip(lower=...): values >= lower (and NaN) kept, the rest -> lower."""
+    return np.where(np.isnan(x) | (x >= lower), x, lower)
+
+
+def _clip_upper(x, upper: float):
+    return np.where(np.isnan(x) | (x <= upper), x, upper)
+
+
+def _nan_if_zero(x):
+    """Series.replace(0.0, np.nan)."""
+    return np.where(x == 0.0, np.nan, x)
+
+
+def _with(df: pl.DataFrame, cols: dict[str, np.ndarray]) -> pl.DataFrame:
+    return df.with_columns([pl.Series(k, np.asarray(v, dtype=np.float64), dtype=pl.Float64)
+                            for k, v in cols.items()])
+
+
+def _frame(cols: dict[str, np.ndarray], height: int) -> pl.DataFrame:
+    return pl.DataFrame({k: pl.Series(k, np.asarray(v, dtype=np.float64), dtype=pl.Float64)
+                         for k, v in cols.items()}, height=height)
+
+
+def add_efficiency(df: pl.DataFrame) -> pl.DataFrame:
     """EFF_FG / EFF_FT (makes above the league rate on the same attempts) on a
     box-score frame; returned as is when it already carries them."""
     if all(name in df.columns for name in EFFICIENCY):
         return df
-    df = df.copy()
-    for name, (made, att, p) in EFFICIENCY.items():
-        df[name] = df[made].astype(float) - p * df[att].astype(float)
-    return df
+    return _with(df, {name: _f(df, made) - p * _f(df, att) for name, (made, att, p) in EFFICIENCY.items()})
 
 
-# --- Z-scores (every played game counts; windows strictly before tonight) ----
+# --- Z-scores of one night ------------------------------------------------------
 
-def compute_zscores(
-    players_raw: pd.DataFrame,
-    stats: list[str] | None = None,
-    pct_stats: list[tuple[str, str, str]] | None = None,
-    with_means: bool = False,
-    families: tuple[str, ...] = (BASIS,),
-) -> pd.DataFrame:
-    """Per player-game surprise scores over played games (MIN > 0).
-
-    Every base excludes tonight's game: *_ALL uses the expanding multi-season
-    history, *_SEASON the expanding current-season history, *_L10/*_L5 the
-    previous 10/5 played games (full window required). SEASON_GAMES is the
-    number of prior games this season (the season window's weight follows it). Three families per
-    window, addressing "bad players always win raw z" (their tiny stds explode
-    the score):
-
-      Z_    raw z              (x - mean) / std                — rarity vs his own noise
-      PZ_   Pearson z          (x - mean) / sqrt(mean + 1)     — variance follows the
-            mean (Poisson-like), so a scrub's collapsed std can't inflate it;
-            same convention as training's Pearson residual
-      QZ_   percentile probit  norm.ppf((#prior below + ties/2 + 0.5)/(n + 1))
-            — distribution-free "how rare was tonight among HIS OWN games",
-            bounded by sample size so small windows can't make extreme claims
-
-    Shooting stats get a BINOMIAL z of tonight's makes against the prior make
-    rate (stored identically under all three families). With ``with_means`` the
-    strictly-prior SEASON and ALL means (make rates for percentages) are added
-    as AVG_SEASON_<stat> / AVG_ALL_<stat>, for display next to tonight's number.
-
-    ``families`` picks which of Z/PZ/QZ to build: the nightly job needs only the
-    scoring basis (memory on a small container), the research backtest all three.
-    """
-    stats = list(Z_STATS if stats is None else stats)
-    pct_stats = list(PCT_STATS if pct_stats is None else pct_stats)
-
-    players_raw = add_efficiency(players_raw)
-    zdf = players_raw[players_raw["MIN"].notna() & (players_raw["MIN"] > 0)]
-    zdf = zdf.sort_values(["PLAYER_ID", "GAME_DATE"]).reset_index(drop=True)
-
-    cols: dict[str, pd.Series] = {}
-    pid = zdf["PLAYER_ID"]
-    season_keys = [pid, zdf["SEASON"]]
-    n_all = zdf.groupby("PLAYER_ID").cumcount().astype(float)          # prior games
-    n_season = zdf.groupby(["PLAYER_ID", "SEASON"]).cumcount().astype(float)
-
-    for stat in stats:
-        s = zdf[stat].astype(float)
-        prior = s.groupby(pid).shift(1)                 # value of the previous game
-        gp = prior.groupby(pid)
-        prior_season = s.groupby(season_keys).shift(1)
-        gps = prior_season.groupby(season_keys)
-
-        def z(mean: pd.Series, std: pd.Series) -> pd.Series:
-            return (s - mean) / std.replace(0.0, np.nan)
-
-        def pearson(mean: pd.Series) -> pd.Series:
-            if stat in EFFICIENCY:   # an impact can be negative: the plain difference
-                return s - mean
-            return (s - mean) / np.sqrt(mean.clip(lower=0.0) + 1.0)
-
-        def probit(rank_incl: pd.Series, n_prior) -> pd.Series:
-            # rank of tonight within (priors + tonight), average-tie method:
-            # rank - 1 == (#priors strictly below) + (#tied priors)/2
-            pct = (rank_incl - 1.0 + 0.5) / (n_prior + 1.0)
-            return pd.Series(norm.ppf(pct), index=s.index)
-
-        bases = {
-            "ALL": (gp.expanding().mean().droplevel(0),
-                    gp.expanding().std().droplevel(0)),
-            "SEASON": (gps.expanding().mean().droplevel([0, 1]),
-                       gps.expanding().std().droplevel([0, 1])),
-            "L10": (gp.rolling(10, min_periods=10).mean().droplevel(0),
-                    gp.rolling(10, min_periods=10).std().droplevel(0)),
-            "L5": (gp.rolling(5, min_periods=5).mean().droplevel(0),
-                   gp.rolling(5, min_periods=5).std().droplevel(0)),
-        }
-        for win, (mean, std) in bases.items():
-            if "Z" in families:
-                cols[f"Z_{win}_{stat}"] = z(mean, std)
-            if "PZ" in families:
-                cols[f"PZ_{win}_{stat}"] = pearson(mean)
-        if with_means:
-            cols[f"AVG_SEASON_{stat}"] = bases["SEASON"][0]
-            cols[f"AVG_ALL_{stat}"] = bases["ALL"][0]
-
-        if "QZ" in families:
-            # Percentile ranks: window INCLUDES tonight (rank - 1 scores vs priors).
-            cols[f"QZ_ALL_{stat}"] = probit(
-                s.groupby(pid).expanding(min_periods=2).rank().droplevel(0), n_all)
-            cols[f"QZ_SEASON_{stat}"] = probit(
-                s.groupby(season_keys).expanding(min_periods=2).rank().droplevel([0, 1]),
-                n_season)
-            cols[f"QZ_L10_{stat}"] = probit(
-                s.groupby(pid).rolling(11, min_periods=11).rank().droplevel(0), 10.0)
-            cols[f"QZ_L5_{stat}"] = probit(
-                s.groupby(pid).rolling(6, min_periods=6).rank().droplevel(0), 5.0)
-
-    # --- FG% / FT% efficiency surprise (volume-aware) -----------------------
-    # BINOMIAL z-score of tonight's shooting vs his prior make rate. A raw % z is
-    # junk (1/1 == "100%!"). Instead: with prior make rate p (over the window) and
-    # tonight's n attempts, the makes are Binomial(n, p) — expected n·p, std
-    # √(n·p(1−p)). The luck-adjusted surprise is
-    #   z = (makes − n·p) / √(n·p(1−p))
-    # Rewards volume (a 6/6 beats a 2/2) and penalizes cold high-volume nights,
-    # while the √ denominator down-weights small-sample flukes. p is the strictly-
-    # prior Σmakes/Σattempts per window (leakage-safe). NaN when n=0 or p∈{0,1}
-    # (no variance to normalize by).
-    for num, den, name in pct_stats:
-        made, att = zdf[num].astype(float), zdf[den].astype(float)
-        pn, pd_ = zdf.groupby(pid)[num].shift(1), zdf.groupby(pid)[den].shift(1)
-        gpn, gpd = pn.groupby(pid), pd_.groupby(pid)
-        pns, pds = zdf.groupby(season_keys)[num].shift(1), zdf.groupby(season_keys)[den].shift(1)
-        gpns, gpds = pns.groupby(season_keys), pds.groupby(season_keys)
-
-        sums = {
-            "ALL": (gpn.expanding().sum().droplevel(0), gpd.expanding().sum().droplevel(0)),
-            "SEASON": (gpns.expanding().sum().droplevel([0, 1]),
-                       gpds.expanding().sum().droplevel([0, 1])),
-            "L10": (gpn.rolling(10, min_periods=10).sum().droplevel(0),
-                    gpd.rolling(10, min_periods=10).sum().droplevel(0)),
-            "L5": (gpn.rolling(5, min_periods=5).sum().droplevel(0),
-                   gpd.rolling(5, min_periods=5).sum().droplevel(0)),
-        }
-        for win, (msum, asum) in sums.items():
-            p = msum / asum.replace(0.0, np.nan)               # prior make rate
-            sd = np.sqrt(att * p * (1.0 - p))                  # binomial std of makes
-            binom_z = (made - att * p) / sd.replace(0.0, np.nan)
-            for fam in families:
-                cols[f"{fam}_{win}_{name}"] = binom_z
-            if with_means and win in ("SEASON", "ALL"):
-                cols[f"AVG_{win}_{name}"] = p
-    cols["SEASON_GAMES"] = n_season
-    return pd.concat([zdf[["PLAYER_ID", "GAME_ID"]], pd.DataFrame(cols, index=zdf.index)], axis=1)
+def _dates(df: pl.DataFrame) -> pl.Series:
+    s = df.get_column("GAME_DATE")
+    return s.cast(pl.Date) if s.dtype != pl.Date else s
 
 
 def night_zscores(
-    rows: pd.DataFrame,
+    rows: pl.DataFrame,
     night: date,
     stats: list[str] | None = None,
     pct_stats: list[tuple[str, str, str]] | None = None,
-) -> pd.DataFrame:
-    """``compute_zscores`` for one night only: the Pearson family plus the
-    prior-window means, for the rows played on ``night``.
-
-    The expanding/rolling version walks every row of every player's history
-    to produce values that are only read at the last row. For the nightly job
-    that is 13k-43k rows of work and intermediates per night. The window
-    statistics at the last row are plain aggregates over the prior rows
-    (all / this season / last 10 / last 5), so this computes exactly those,
-    for the night's rows only: same numbers, one pass, a few hundred rows out.
-    Equality with ``compute_zscores`` is pinned by test_surprise.
-    """
+) -> pl.DataFrame:
+    """The Pearson z family plus the prior-window means, for the rows played on
+    ``night``: per player, aggregates over his prior rows (all / this season /
+    last 10 / last 5). Columns: PLAYER_ID, GAME_ID, then the score columns, in
+    the order research/surprise_pandas.night_zscores builds them; means and
+    sums are pandas' Kahan-compensated group kernels (kernels.group_mean/sum)."""
     stats = list(Z_STATS if stats is None else stats)
     pct_stats = list(PCT_STATS if pct_stats is None else pct_stats)
-    night_ts = pd.Timestamp(night)
 
     rows = add_efficiency(rows)
-    played = rows[rows["MIN"].notna() & (rows["MIN"] > 0)]
-    played = played.sort_values(["PLAYER_ID", "GAME_DATE"])
-    dates = played["GAME_DATE"].dt.normalize()
-    tonight = played[dates == night_ts].drop_duplicates("PLAYER_ID", keep="last").set_index("PLAYER_ID")
-    prior = played[(dates < night_ts) & played["PLAYER_ID"].isin(tonight.index)]
-    same_season = prior["SEASON"].to_numpy() == tonight["SEASON"].reindex(prior["PLAYER_ID"]).to_numpy()
+    mins = _f(rows, "MIN")
+    played = rows.filter(pl.Series(~np.isnan(mins) & (mins > 0)))
+    played = played.sort(["PLAYER_ID", "GAME_DATE"], maintain_order=True)
+    dates = _dates(played)
+    on_night = (dates == night).to_numpy()
+    tonight = (played.filter(pl.Series(on_night))
+               .unique(subset=["PLAYER_ID"], keep="last", maintain_order=True))
+    t_ids = tonight.get_column("PLAYER_ID").to_numpy()
+    pids = played.get_column("PLAYER_ID").to_numpy()
+    prior_mask = (dates < night).to_numpy() & np.isin(pids, t_ids)
+    prior = played.filter(pl.Series(prior_mask))
+    p_ids = prior.get_column("PLAYER_ID").to_numpy()
+    pos_of = {int(p): i for i, p in enumerate(t_ids)}
+    t_season = tonight.get_column("SEASON").to_list()
+    p_season = prior.get_column("SEASON").to_list()
+    same_season = np.array([s == t_season[pos_of[int(p)]] for p, s in zip(p_ids, p_season)], dtype=bool)
+
+    def tail_mask(ids: np.ndarray, k: int) -> np.ndarray:
+        # groupby(PLAYER_ID).tail(k) on rows already grouped contiguously
+        n = len(ids)
+        if n == 0:
+            return np.zeros(0, dtype=bool)
+        starts, ends = kernels.segments_from_sorted_keys(ids)
+        lengths = ends - starts
+        rank_from_end = np.repeat(ends, lengths) - np.arange(n)
+        return rank_from_end <= k
 
     windows = {
-        "ALL": (prior, 1),
-        "SEASON": (prior[same_season], 1),
-        "L10": (prior.groupby("PLAYER_ID").tail(10), 10),
-        "L5": (prior.groupby("PLAYER_ID").tail(5), 5),
+        "ALL": (np.ones(len(prior), dtype=bool), 1),
+        "SEASON": (same_season, 1),
+        "L10": (tail_mask(p_ids, 10), 10),
+        "L5": (tail_mask(p_ids, 5), 5),
     }
-    cols: dict[str, pd.Series] = {}
-    for win, (w, need) in windows.items():
-        g = w.groupby("PLAYER_ID")
-        enough = g.size().reindex(tonight.index).fillna(0) >= need
+
+    def per_tonight(uniq: np.ndarray, vals: np.ndarray) -> np.ndarray:
+        out = np.full(len(t_ids), np.nan)
+        for k, v in zip(uniq, vals):
+            out[pos_of[int(k)]] = v
+        return out
+
+    cols: dict[str, np.ndarray] = {}
+    for win, (mask, need) in windows.items():
+        w_ids = p_ids[mask]
+        uniq, counts = np.unique(w_ids, return_counts=True)
+        size = per_tonight(uniq, counts.astype(float))
+        enough = np.where(np.isnan(size), 0.0, size) >= need
         for stat in stats:
-            mean = g[stat].mean().reindex(tonight.index).where(enough)
-            x = tonight[stat].astype(float)
+            u, means = kernels.group_mean(_f(prior, stat)[mask], w_ids)
+            mean = np.where(enough, per_tonight(u, means), np.nan)
+            x = _f(tonight, stat)
             diff = x - mean
-            cols[f"PZ_{win}_{stat}"] = diff if stat in EFFICIENCY else diff / np.sqrt(mean.clip(lower=0.0) + 1.0)
+            cols[f"PZ_{win}_{stat}"] = diff if stat in EFFICIENCY else diff / np.sqrt(_clip_lower(mean, 0.0) + 1.0)
             if win in ("ALL", "SEASON"):
                 cols[f"AVG_{win}_{stat}"] = mean
         for num, den, name in pct_stats:
-            msum = g[num].sum().reindex(tonight.index).where(enough)
-            asum = g[den].sum().reindex(tonight.index).where(enough)
-            p_rate = msum / asum.replace(0.0, np.nan)
-            att, made = tonight[den].astype(float), tonight[num].astype(float)
-            sd = np.sqrt(att * p_rate * (1.0 - p_rate))
-            cols[f"PZ_{win}_{name}"] = (made - att * p_rate) / sd.replace(0.0, np.nan)
+            u, ms = kernels.group_sum(_f(prior, num)[mask], w_ids)
+            msum = np.where(enough, per_tonight(u, ms), np.nan)
+            u, as_ = kernels.group_sum(_f(prior, den)[mask], w_ids)
+            asum = np.where(enough, per_tonight(u, as_), np.nan)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                p_rate = msum / _nan_if_zero(asum)
+                att, made = _f(tonight, den), _f(tonight, num)
+                sd = np.sqrt(att * p_rate * (1.0 - p_rate))
+                cols[f"PZ_{win}_{name}"] = (made - att * p_rate) / _nan_if_zero(sd)
             if win in ("ALL", "SEASON"):
                 cols[f"AVG_{win}_{name}"] = p_rate
-    cols["SEASON_GAMES"] = (
-        prior[same_season].groupby("PLAYER_ID").size().reindex(tonight.index).fillna(0).astype(float)
-    )
-    out = pd.DataFrame(cols, index=tonight.index)
-    out.insert(0, "GAME_ID", tonight["GAME_ID"])
-    return out.reset_index()
+    uniq, counts = np.unique(p_ids[same_season], return_counts=True)
+    sg = per_tonight(uniq, counts.astype(float))
+    cols["SEASON_GAMES"] = np.where(np.isnan(sg), 0.0, sg)
+    return pl.concat([tonight.select("PLAYER_ID", "GAME_ID"), _frame(cols, len(t_ids))], how="horizontal")
 
 
-def add_errors(df: pd.DataFrame) -> pd.DataFrame:
+def add_errors(df: pl.DataFrame) -> pl.DataFrame:
     """ERR_<stat> = actual − predicted for the model targets and the derived
     percentages (NaN where there is no prediction)."""
-    df = df.copy()
-    df["FG_PCT"] = np.where(df["FGA"] > 0, df["FGM"] / df["FGA"].replace(0, np.nan), np.nan)
-    df["FT_PCT"] = np.where(df["FTA"] > 0, df["FTM"] / df["FTA"].replace(0, np.nan), np.nan)
-    if "PRED_FG_PCT" not in df.columns:
-        df["PRED_FG_PCT"] = df["PRED_FGM"] / df["PRED_FGA"].replace(0, np.nan)
-    if "PRED_FT_PCT" not in df.columns:
-        df["PRED_FT_PCT"] = df["PRED_FTM"] / df["PRED_FTA"].replace(0, np.nan)
-    for stat in ERR_TARGETS + ["FG_PCT", "FT_PCT"]:
-        pred = df[f"PRED_{stat}"] if f"PRED_{stat}" in df.columns else np.nan
-        df[f"ERR_{stat}"] = df[stat] - pred
+    new: dict[str, np.ndarray] = {}
+    get = lambda c: new[c] if c in new else _f(df, c)  # noqa: E731
+    with np.errstate(divide="ignore", invalid="ignore"):
+        new["FG_PCT"] = np.where(get("FGA") > 0, get("FGM") / _nan_if_zero(get("FGA")), np.nan)
+        new["FT_PCT"] = np.where(get("FTA") > 0, get("FTM") / _nan_if_zero(get("FTA")), np.nan)
+        if "PRED_FG_PCT" not in df.columns:
+            new["PRED_FG_PCT"] = get("PRED_FGM") / _nan_if_zero(get("PRED_FGA"))
+        if "PRED_FT_PCT" not in df.columns:
+            new["PRED_FT_PCT"] = get("PRED_FTM") / _nan_if_zero(get("PRED_FTA"))
+        for stat in ERR_TARGETS + ["FG_PCT", "FT_PCT"]:
+            has_pred = f"PRED_{stat}" in df.columns or f"PRED_{stat}" in new
+            pred = get(f"PRED_{stat}") if has_pred else np.nan
+            new[f"ERR_{stat}"] = get(stat) - pred
+    df = _with(df, new)
     df = add_efficiency(df)
+    eff: dict[str, np.ndarray] = {}
     for name, (made, att, p) in EFFICIENCY.items():
-        df[f"PRED_{name}"] = df[f"PRED_{made}"] - p * df[f"PRED_{att}"]
-        df[f"ERR_{name}"] = df[name] - df[f"PRED_{name}"]
-    return df
+        eff[f"PRED_{name}"] = _f(df, f"PRED_{made}") - p * _f(df, f"PRED_{att}")
+        eff[f"ERR_{name}"] = _f(df, name) - eff[f"PRED_{name}"]
+    return _with(df, eff)
 
 
 # --- Scoring ------------------------------------------------------------------
@@ -437,28 +376,32 @@ def required_columns() -> list[str]:
     return list(cols)
 
 
-def standardize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
-    """NORM_<col> = (col − mean) / std with the reference season's moments."""
-    out = pd.DataFrame(index=df.index)
+def _standardize(df: pl.DataFrame, calibration: dict) -> dict[str, np.ndarray]:
+    out: dict[str, np.ndarray] = {}
+    n = df.height
     for col, moments in calibration["norm"].items():
         if col not in df.columns:
             continue
         std = moments["std"]
-        out[f"NORM_{col}"] = (df[col] - moments["mean"]) / std if std and std > 0 else np.nan
+        out[f"NORM_{col}"] = (_f(df, col) - moments["mean"]) / std if std and std > 0 else np.full(n, np.nan)
     return out
 
 
-def rarity_scores(values: pd.Series, quantiles: list[float]) -> pd.Series:
+def standardize(df: pl.DataFrame, calibration: dict) -> pl.DataFrame:
+    """NORM_<col> = (col − mean) / std with the reference season's moments."""
+    return _frame(_standardize(df, calibration), df.height)
+
+
+def rarity_scores(values: np.ndarray, quantiles: list[float]) -> np.ndarray:
     """Normal score of each value by its rank in the reference season:
     ``quantiles`` are the season's values at the normal scores RARITY_GRID. A
     value the season repeats (a tie over several grid points) gets the middle
-    of its stretch. Rising, and bounded by the grid's ends."""
+    of its stretch. Rising, and bounded by the grid's ends. NaN stays NaN."""
     q = np.asarray(quantiles, dtype=float)
-    v = values.to_numpy(dtype=float)
+    v = np.asarray(values, dtype=float)
     lo = np.searchsorted(q, v, side="left")
     hi = np.searchsorted(q, v, side="right")
     last = len(q) - 1
-    # between two grid points: linear in the value; on a tie: the stretch's middle
     left = np.clip(lo - 1, 0, last)
     right = np.clip(lo, 0, last)
     span = q[right] - q[left]
@@ -466,59 +409,89 @@ def rarity_scores(values: pd.Series, quantiles: list[float]) -> pd.Series:
     between = RARITY_GRID[left] + frac * (RARITY_GRID[right] - RARITY_GRID[left])
     tied = (RARITY_GRID[np.clip(lo, 0, last)] + RARITY_GRID[np.clip(hi - 1, 0, last)]) / 2.0
     out = np.where(hi > lo, tied, between)
-    return pd.Series(out, index=values.index).where(values.notna())
+    return np.where(np.isnan(v), np.nan, out)
 
 
-def rarity_normalize(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
+def _rarity_normalize(df: pl.DataFrame, calibration: dict) -> dict[str, np.ndarray]:
+    return {f"RARE_{col}": rarity_scores(_f(df, col), quantiles)
+            for col, quantiles in calibration.get("rarity", {}).items() if col in df.columns}
+
+
+def rarity_normalize(df: pl.DataFrame, calibration: dict) -> pl.DataFrame:
     """RARE_<col> = the column's value as a normal score of its rank in the
     reference season (the bust side's scale)."""
-    out = pd.DataFrame(index=df.index)
-    for col, quantiles in calibration.get("rarity", {}).items():
-        if col in df.columns:
-            out[f"RARE_{col}"] = rarity_scores(df[col], quantiles)
-    return out
+    return _frame(_rarity_normalize(df, calibration), df.height)
 
 
-def weighted_metric(df: pd.DataFrame, col_weights: dict[str, float], prefix: str = "NORM_") -> pd.Series:
+def _season_factor(cols: dict[str, np.ndarray], n: int):
+    if "SEASON_GAMES" not in cols:
+        return np.ones(n)
+    f = _clip_upper(_clip_lower(cols["SEASON_GAMES"], 0), SEASON_FULL_GAMES) / SEASON_FULL_GAMES
+    return np.where(np.isnan(f), 1.0, f)
+
+
+def season_factor(df: pl.DataFrame) -> np.ndarray:
+    """min(SEASON_GAMES, SEASON_FULL_GAMES) / SEASON_FULL_GAMES per row: how much
+    of its weight the season window gets (1 where the count is unknown)."""
+    cols = {"SEASON_GAMES": _f(df, "SEASON_GAMES")} if "SEASON_GAMES" in df.columns else {}
+    return _season_factor(cols, df.height)
+
+
+def _weighted_metric(cols: dict[str, np.ndarray], n: int, col_weights: dict[str, float],
+                     prefix: str = "NORM_") -> np.ndarray:
+    factor = _season_factor(cols, n)
+    total = sum(abs(w) for w in col_weights.values() if w)
+    if total == 0:
+        return np.full(n, np.nan)
+    acc = np.zeros(n)
+    any_valid = np.zeros(n, dtype=bool)
+    for col, w in col_weights.items():
+        norm_col = f"{prefix}{col}"
+        if not w or norm_col not in cols:
+            continue
+        weight = w * factor if "_SEASON_" in col else w
+        x = cols[norm_col]
+        acc = acc + np.where(np.isnan(x), 0.0, x) * weight
+        any_valid = any_valid | ~np.isnan(x)
+    return np.where(any_valid, acc / total, np.nan)
+
+
+def weighted_metric(df: pl.DataFrame, col_weights: dict[str, float], prefix: str = "NORM_") -> np.ndarray:
     """Sum(w · NORM_col) / Sum(|w|); NaN components contribute 0, rows where
     every weighted component is NaN stay NaN. Season-window columns are scaled
     per row by season_factor (their weight grows with the games behind them).
     ``prefix`` picks the scale: NORM_ (standardized) or RARE_ (rarity)."""
-    factor = season_factor(df)
-    total = sum(abs(w) for w in col_weights.values() if w)
-    if total == 0:
-        return pd.Series(np.nan, index=df.index)
-    acc = pd.Series(0.0, index=df.index)
-    any_valid = pd.Series(False, index=df.index)
-    for col, w in col_weights.items():
-        norm_col = f"{prefix}{col}"
-        if not w or norm_col not in df.columns:
-            continue
-        weight = w * factor if "_SEASON_" in col else w
-        acc = acc + df[norm_col].fillna(0.0) * weight
-        any_valid = any_valid | df[norm_col].notna()
-    return (acc / total).where(any_valid)
+    cols = {c: _f(df, c) for c in df.columns if c.startswith(prefix) or c == "SEASON_GAMES"}
+    return _weighted_metric(cols, df.height, col_weights, prefix)
 
 
-def final_raw(df: pd.DataFrame) -> pd.DataFrame:
+def _final_raw(cols: dict[str, np.ndarray], n: int) -> dict[str, np.ndarray]:
+    volume = np.sqrt(cols["MIN"] / 30.0) if VOLUME_WEIGHT else 1.0
+    boom1, boom2 = metric_columns()
+    bust1, bust2 = metric_columns(bust=True)
+    bust_volume = _clip_upper(volume, BUST_VOLUME_CAP) if VOLUME_WEIGHT else 1.0
+    cols = dict(cols)
+    for c in [c for c in cols if c.startswith("RARE_")]:
+        x = cols[c]
+        cols[c] = np.sign(x) * np.abs(x) ** BUST_COLLAPSE_POWER
+    mz = _weighted_metric(cols, n, boom1) * volume
+    mz_bust = _weighted_metric(cols, n, bust1, "RARE_") * bust_volume
+    me, me_bust = _weighted_metric(cols, n, boom2), _weighted_metric(cols, n, bust2, "RARE_")
+    return {
+        "METRIC_Z": _clip_lower(mz, 0) + _clip_upper(mz_bust, 0),
+        "METRIC_ERR": _clip_lower(me, 0) + _clip_upper(me_bust, 0),
+        "FINAL_RAW": blend(mz, me, mz_bust, me_bust),
+    }
+
+
+def final_raw(df: pl.DataFrame) -> pl.DataFrame:
     """METRIC_Z, METRIC_ERR and the un-normalized FINAL on a frame that already
     carries the NORM_ columns (boom side), the RARE_ columns (bust side) and
     MIN. Each metric is built twice, with the boom side's weights and scale
     and with the bust side's; the stored METRIC_Z / METRIC_ERR are the boom
     reading where positive plus the bust reading where negative."""
-    out = pd.DataFrame(index=df.index)
-    volume = np.sqrt(df["MIN"].astype(float) / 30.0) if VOLUME_WEIGHT else 1.0
-    boom1, boom2 = metric_columns()
-    bust1, bust2 = metric_columns(bust=True)
-    bust_volume = volume.clip(upper=BUST_VOLUME_CAP) if VOLUME_WEIGHT else 1.0
-    rare = [c for c in df.columns if c.startswith("RARE_")]
-    df = df.assign(**{c: np.sign(df[c]) * df[c].abs() ** BUST_COLLAPSE_POWER for c in rare})
-    mz, mz_bust = weighted_metric(df, boom1) * volume, weighted_metric(df, bust1, "RARE_") * bust_volume
-    me, me_bust = weighted_metric(df, boom2), weighted_metric(df, bust2, "RARE_")
-    out["METRIC_Z"] = mz.clip(lower=0) + mz_bust.clip(upper=0)
-    out["METRIC_ERR"] = me.clip(lower=0) + me_bust.clip(upper=0)
-    out["FINAL_RAW"] = blend(mz, me, mz_bust, me_bust)
-    return out
+    cols = {c: _f(df, c) for c in df.columns}
+    return _frame(_final_raw(cols, df.height), df.height)
 
 
 def by_side(z, err, z_bust=None, err_bust=None):
@@ -526,206 +499,166 @@ def by_side(z, err, z_bust=None, err_bust=None):
     boom-side blend where positive plus the bust-side blend where negative.
     When both sides agree that is the one side's blend; when they disagree
     they cancel toward 0. Rising in both inputs and continuous, so a better
-    game never scores lower (picking one side by the sign of the other let a
-    worse model error flip a 0 into +1.3). ``z_bust`` / ``err_bust`` are the
-    bust side's own reading of the two metrics (its weights and scale); the
-    same inputs when not given. Works on Series and DataFrames."""
+    game never scores lower. ``z_bust`` / ``err_bust`` are the bust side's own
+    reading of the two metrics; the same inputs when not given. NumPy arrays."""
     b = BLEND
     z_bust = z if z_bust is None else z_bust
     err_bust = err if err_bust is None else err_bust
     fp = (b["w1_pos"] * z + b["w2_pos"] * err) / ((abs(b["w1_pos"]) + abs(b["w2_pos"])) or 1.0)
     fn = (b["w1_neg"] * z_bust + b["w2_neg"] * err_bust) / ((abs(b["w1_neg"]) + abs(b["w2_neg"])) or 1.0)
-    return fp.clip(lower=0) + fn.clip(upper=0)
+    return _clip_lower(fp, 0) + _clip_upper(fn, 0)
 
 
-def blend(mz: pd.Series, me: pd.Series, mz_bust: pd.Series | None = None, me_bust: pd.Series | None = None) -> pd.Series:
+def blend(mz, me, mz_bust=None, me_bust=None):
     """The final's raw value from metric 1 and metric 2 (by_side). NaN where
     metric 2 is (no model estimate)."""
     return by_side(mz, me, mz_bust, me_bust)
 
 
-def to_standard_normal_with(final: pd.Series, quantiles: list[float], count: int) -> pd.Series:
+def to_standard_normal_with(final: np.ndarray, quantiles: list[float], count: int) -> np.ndarray:
     q = np.asarray(quantiles, dtype=float)
     probs = np.linspace(0.0, 1.0, len(q))
     n = float(count or len(q))
-    pct = np.interp(final.to_numpy(dtype=float), q, probs)
+    final = np.asarray(final, dtype=float)
+    pct = np.interp(final, q, probs)
     pct = np.clip(pct, 0.5 / n, 1.0 - 0.5 / n)
-    return pd.Series(norm.ppf(pct), index=final.index).where(final.notna())
+    return np.where(np.isnan(final), np.nan, norm_ppf(pct))
 
 
-def to_standard_normal(final: pd.Series, calibration: dict) -> pd.Series:
+def to_standard_normal(final: np.ndarray, calibration: dict) -> np.ndarray:
     """Rank-based inverse-normal transform against the reference season:
     Φ⁻¹(percentile of the value among the season's finals). Monotonic, so the
     ranking never changes; only the scale becomes ~N(0,1)."""
     return to_standard_normal_with(final, calibration["final_quantiles"], calibration.get("final_count", 0))
 
 
-def score_frame(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
-    """Score a frame of player-games that carries MIN, the raw z columns
-    (compute_zscores) and the ERR_ columns (add_errors). Returns METRIC_Z,
-    METRIC_ERR, FINAL_RAW and SCORE (the final on the N(0,1) scale)."""
+def score_frame(df: pl.DataFrame, calibration: dict) -> pl.DataFrame:
+    """Score a frame of player-games that carries MIN, the raw z columns and
+    the ERR_ columns (add_errors). Returns METRIC_Z, METRIC_ERR, FINAL_RAW,
+    HAS_ESTIMATE and SCORE (the final on the N(0,1) scale)."""
+    n = df.height
     carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
-    normed = pd.concat([df[carry], standardize(df, calibration), rarity_normalize(df, calibration)], axis=1)
-    out = final_raw(normed)
+    cols = {c: _f(df, c) for c in carry}
+    cols.update(_standardize(df, calibration))
+    cols.update(_rarity_normalize(df, calibration))
+    out = _final_raw(cols, n)
     with_estimate = to_standard_normal(out["FINAL_RAW"], calibration)
     z_only = to_standard_normal_with(
-        out["METRIC_Z"], calibration["z_only_quantiles"], calibration.get("z_only_count", 0)
-    )
-    out["HAS_ESTIMATE"] = out["METRIC_ERR"].notna()
-    out["SCORE"] = with_estimate.where(out["HAS_ESTIMATE"], z_only)
-    return out
+        out["METRIC_Z"], calibration["z_only_quantiles"], calibration.get("z_only_count", 0))
+    has = ~np.isnan(out["METRIC_ERR"])
+    return pl.DataFrame({
+        "METRIC_Z": out["METRIC_Z"], "METRIC_ERR": out["METRIC_ERR"], "FINAL_RAW": out["FINAL_RAW"],
+        "HAS_ESTIMATE": pl.Series("HAS_ESTIMATE", has, dtype=pl.Boolean),
+        "SCORE": np.where(has, with_estimate, z_only),
+    }, height=n)
 
 
-def per_stat_surprise(uz: pd.DataFrame, ue: pd.DataFrame) -> pd.DataFrame:
+def per_stat_surprise(uz: np.ndarray, ue: np.ndarray) -> np.ndarray:
     """The final score's blend (by_side), applied per stat: z against his own
     history and the model's error for that stat; z alone where the model has
-    no estimate (NaN error)."""
-    ue = ue.reindex(columns=uz.columns)
-    return by_side(uz, ue.fillna(0.0)).where(ue.notna(), uz)
+    no estimate (NaN error). (rows, stats) arrays."""
+    return np.where(np.isnan(ue), uz, by_side(uz, np.where(np.isnan(ue), 0.0, ue)))
 
 
-def stat_surprises(df: pd.DataFrame, calibration: dict) -> pd.DataFrame:
+def stat_surprises(df: pl.DataFrame, calibration: dict) -> tuple[list[str], np.ndarray]:
     """Per row and stat, the per-stat surprise ``reasons_for`` marks: z
     against his own windows (averaged over the windows that exist) blended
-    with that stat's standardized model error (per_stat_surprise)."""
-    normed = standardize(df, calibration)
+    with that stat's standardized model error (per_stat_surprise).
+    Returns (stats, (rows, stats) array)."""
+    n = df.height
+    normed = _standardize(df, calibration)
     factor = season_factor(df)
-    strength = {}
+    stats, strength = [], []
     for stat in Z_WEIGHTS:
-        acc = pd.Series(0.0, index=df.index)
-        have = pd.Series(0.0, index=df.index)
+        acc = np.zeros(n)
+        have = np.zeros(n)
         for win, ww in WINDOW_WEIGHTS.items():
             col = f"NORM_{BASIS}_{win}_{stat}"
-            if col in normed.columns:
+            if col in normed:
                 w = ww * factor if win == "SEASON" else ww
-                acc = acc + normed[col].fillna(0.0) * w
-                have = have + normed[col].notna() * w
-        # Average over the windows that exist: on opening night the season
-        # window is empty for everyone, and dividing by all four weights would
-        # dilute every verdict by a third.
-        strength[stat] = (acc / have.replace(0.0, np.nan))
-    uz = pd.DataFrame(strength)
-    # the model's side of each stat, standardized; NaN without an estimate
-    ue = pd.DataFrame({
-        stat: normed[f"NORM_ERR_{err}"] if f"NORM_ERR_{err}" in normed.columns else np.nan
-        for stat, err in REASON_ERR_COLUMN.items() if stat in uz.columns
-    }, index=df.index)
-    return per_stat_surprise(uz, ue)
+                x = normed[col]
+                acc = acc + np.where(np.isnan(x), 0.0, x) * w
+                have = have + (~np.isnan(x)) * w
+        with np.errstate(divide="ignore", invalid="ignore"):
+            strength.append(acc / _nan_if_zero(have))
+        stats.append(stat)
+    uz = np.column_stack(strength) if strength else np.zeros((n, 0))
+    ue = np.column_stack([
+        normed[f"NORM_ERR_{REASON_ERR_COLUMN[s]}"] if s in REASON_ERR_COLUMN and f"NORM_ERR_{REASON_ERR_COLUMN[s]}" in normed
+        else np.full(n, np.nan)
+        for s in stats
+    ]) if stats else np.zeros((n, 0))
+    return stats, per_stat_surprise(uz, ue)
 
 
-def shown_average(row: pd.Series, stat: str) -> float:
+def shown_average(row: dict, stat: str) -> float:
     """The average a reason shows next to tonight's value: his average this
     season once it has SEASON_AVG_MIN_GAMES games; before that, over all his
     games (a one-game season average misleads). NaN when neither exists."""
     season_games = row.get("SEASON_GAMES", SEASON_AVG_MIN_GAMES)
+    if season_games is None:
+        season_games = float("nan")
     for win in ("SEASON", "ALL"):
         if win == "SEASON" and not season_games >= SEASON_AVG_MIN_GAMES:
             continue
         value = row.get(f"AVG_{win}_{stat}", np.nan)
-        if pd.notna(value):
+        if value is not None and not (isinstance(value, float) and np.isnan(value)):
             return value
     return np.nan
 
 
-def reasons_for(df: pd.DataFrame, scores: pd.DataFrame, calibration: dict) -> list[list[dict]]:
+def _nargsort_desc(values: np.ndarray) -> np.ndarray:
+    """pandas.core.sorting.nargsort(ascending=False) on NaN-free values: the
+    order Series.sort_values(ascending=False) picks, ties included."""
+    idx = np.arange(len(values))
+    rev_vals = values[::-1]
+    rev_idx = idx[::-1]
+    indexer = rev_idx[rev_vals.argsort(kind="quicksort")]
+    return indexer[::-1]
+
+
+def reasons_for(df: pl.DataFrame, scores: pl.DataFrame, calibration: dict) -> list[list[dict]]:
     """Per row, the stats that made the night, each with its own sign.
 
-    A stat is listed when its per-stat surprise (``per_stat_surprise``: z
-    against his own windows blended with the model's error for that stat, NOT
-    weighted by the metric's stat weights, so a 7-three night is a reason
-    whatever FG3M's weight) is at least MIN_REASON either way: positive =
-    better than his norm and the model's expectation, negative = worse. A boom
-    can carry a cold stat and a bust a good one. The first entry matches the
-    score's sign so the headline reads right; the rest come strongest first.
-    Each entry: stat, tonight's
-    value, his season (or all-time) average, z (the per-stat surprise).
+    A stat is listed when its per-stat surprise (``per_stat_surprise``) is at
+    least MIN_REASON either way: positive = better than his norm and the
+    model's expectation, negative = worse. The first entry matches the score's
+    sign so the headline reads right; the rest come strongest first. Each
+    entry: stat, tonight's value, his season (or all-time) average, z.
     """
-    u = stat_surprises(df, calibration)
-
+    stats, u = stat_surprises(df, calibration)
+    score_col = _f(scores, "SCORE")
+    rows = df.to_dicts()
     out: list[list[dict]] = []
-    for idx in df.index:
-        score = scores.at[idx, "SCORE"]
-        if pd.isna(score):
+    for i, row_vals in enumerate(rows):
+        score = score_col[i]
+        if np.isnan(score):
             out.append([])
             continue
-        row = u.loc[idx].dropna()
-        strong = row[(row >= MIN_REASON) | (row <= -MIN_REASON_BAD)]
-        ranked = strong.reindex(strong.abs().sort_values(ascending=False).index)
-        lead = ranked[(ranked > 0) if score >= 0 else (ranked < 0)].head(1)
-        ranked = pd.concat([lead, ranked.drop(lead.index)])
+        vals = u[i]
+        keep = [j for j in range(len(stats)) if not np.isnan(vals[j])]
+        strong = [j for j in keep if vals[j] >= MIN_REASON or vals[j] <= -MIN_REASON_BAD]
+        sv = np.array([vals[j] for j in strong], dtype=float)
+        ranked = [strong[k] for k in _nargsort_desc(np.abs(sv))] if strong else []
+        lead = [j for j in ranked if (vals[j] > 0 if score >= 0 else vals[j] < 0)][:1]
+        ranked = lead + [j for j in ranked if j not in lead]
         picked = []
-        for stat, c in ranked.head(N_REASONS).items():
-            avg = shown_average(df.loc[idx], stat)
-            value = df.at[idx, stat]
+        for j in ranked[:N_REASONS]:
+            stat = stats[j]
+            avg = shown_average(row_vals, stat)
+            value = row_vals.get(stat)
+            nd = 3 if stat.endswith("_PCT") else 1
             picked.append({
                 "stat": stat,
-                "value": None if pd.isna(value) else round(float(value), 3 if stat.endswith("_PCT") else 1),
-                "avg": None if pd.isna(avg) else round(float(avg), 3 if stat.endswith("_PCT") else 1),
-                "z": round(float(c), 2),
+                "value": None if value is None or (isinstance(value, float) and np.isnan(value)) else round(float(value), nd),
+                "avg": None if avg is None or (isinstance(avg, float) and np.isnan(avg)) else round(float(avg), nd),
+                "z": round(float(vals[j]), 2),
             })
         out.append(picked)
     return out
 
 
 # --- Calibration --------------------------------------------------------------
-
-def add_season_games(df: pd.DataFrame) -> pd.DataFrame:
-    """SEASON_GAMES (prior played games this season) for a frame whose z
-    columns were built before the column existed (the walk-forward parquet)."""
-    df = df.copy()
-    played = df[df["MIN"].fillna(0) > 0].sort_values(["PLAYER_ID", "GAME_DATE"])
-    df["SEASON_GAMES"] = played.groupby(["PLAYER_ID", "SEASON"]).cumcount().astype(float)
-    return df
-
-
-def season_factor(df: pd.DataFrame) -> pd.Series:
-    """min(SEASON_GAMES, SEASON_FULL_GAMES) / SEASON_FULL_GAMES per row: how much
-    of its weight the season window gets (1 where the count is unknown)."""
-    if "SEASON_GAMES" not in df.columns:
-        return pd.Series(1.0, index=df.index)
-    return (df["SEASON_GAMES"].astype(float).clip(lower=0, upper=SEASON_FULL_GAMES) / SEASON_FULL_GAMES).fillna(1.0)
-
-
-def build_calibration(df: pd.DataFrame, source: str, n_quantiles: int = 1001) -> dict:
-    """Reference moments and final-metric quantiles from a season frame that
-    carries MIN, the raw z columns and the ERR_ columns (the research parquet)."""
-    norm_moments = {}
-    for col in required_columns():
-        if col not in df.columns:
-            continue
-        s = df[col].dropna()
-        norm_moments[col] = {"mean": float(s.mean()), "std": float(s.std()), "count": int(len(s))}
-    # The bust side's scale: each column's values at the normal scores RARITY_GRID.
-    rarity = {
-        col: [float(v) for v in np.quantile(df[col].dropna(), norm.cdf(RARITY_GRID))]
-        for col, moments in norm_moments.items() if moments["count"]
-    }
-    calibration = {"source": source, "norm": norm_moments, "rarity": rarity}
-    carry = ["MIN"] + (["SEASON_GAMES"] if "SEASON_GAMES" in df.columns else [])
-    normed = pd.concat([df[carry], standardize(df, calibration), rarity_normalize(df, calibration)], axis=1)
-    raw = final_raw(normed)
-    grid = np.linspace(0, 1, n_quantiles)
-    if raw["METRIC_Z"].dropna().empty:
-        raise ValueError("no scorable rows: the frame carries no z-score columns")
-    # Reference for players scored on their own history alone: the reference
-    # season's rows that had no model estimate either. Fitted on last season,
-    # scored on the next one, that kept them symmetric (3.7% / 3.7% at +-1.8
-    # on 2024-25 and 2025-26); fitted on all rows they came out too narrow
-    # and leaning to booms (1.7% / 1.2%).
-    z_only = raw.loc[raw["METRIC_ERR"].isna(), "METRIC_Z"].dropna()
-    if z_only.empty:   # every row had an estimate (tests)
-        z_only = raw["METRIC_Z"].dropna()
-    final = raw["FINAL_RAW"].dropna()
-    if final.empty:   # a frame without any model prediction (tests, a bare season)
-        final = raw["METRIC_Z"].dropna()
-    calibration["final_quantiles"] = [float(v) for v in np.quantile(final, grid)]
-    calibration["final_count"] = int(len(final))
-    calibration["z_only_quantiles"] = [float(v) for v in np.quantile(z_only, grid)]
-    calibration["z_only_count"] = int(len(z_only))
-    calibration["built_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    calibration["settings"] = calibration_settings()
-    return calibration
-
 
 def calibration_settings() -> dict:
     """Everything the calibration was trained under: a shipped calibration

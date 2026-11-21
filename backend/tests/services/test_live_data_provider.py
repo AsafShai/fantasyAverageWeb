@@ -7,6 +7,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
+
+import polars as pl
+from polars.testing import assert_frame_equal as assert_pl_frame_equal
 import pytest
 
 import app.services.data_provider as data_provider_module
@@ -105,7 +108,7 @@ def flag_off(monkeypatch):
 
 
 def _pts(df, team_id=1):
-    return int(df.set_index("team_id").loc[team_id, "PTS"])
+    return int(df.to_pandas().set_index("team_id").loc[team_id, "PTS"])
 
 
 # --- flag off: everything exactly as today ----------------------------------
@@ -114,10 +117,10 @@ def _pts(df, team_id=1):
 async def test_flag_off_live_calls_return_the_official_objects(provider, flag_off):
     official = await provider.get_totals_df()
     assert await provider.get_totals_df(live=True) is official
-    pd.testing.assert_frame_equal(await provider.get_averages_df(live=True), await provider.get_averages_df())
-    pd.testing.assert_frame_equal(await provider.get_rankings_df(live=True), await provider.get_rankings_df())
+    assert_pl_frame_equal(await provider.get_averages_df(live=True), await provider.get_averages_df())
+    assert_pl_frame_equal(await provider.get_rankings_df(live=True), await provider.get_rankings_df())
     for live_df, official_df in zip(await provider.get_all_dataframes(live=True), await provider.get_all_dataframes()):
-        pd.testing.assert_frame_equal(live_df, official_df)
+        assert_pl_frame_equal(live_df, official_df)
     assert await provider.get_slot_usage(live=True) == await provider.get_slot_usage()
 
 
@@ -174,11 +177,11 @@ async def test_live_averages_count_finished_games_only(provider, flag_on):
         {"game_id": GAME_A, "status": "final"}, {"game_id": GAME_B, "status": "live"},
     ]}
     averages = await provider.get_averages_df(live=True)
-    team = averages.set_index("team_id").loc[1]
+    team = averages.to_pandas().set_index("team_id").loc[1]
     # Game A only: 1010 points over 91 games.
     assert team["PTS"] == pytest.approx(1010 / 91)
     _, averages_all, _ = await provider.get_all_dataframes(live=True)
-    assert averages_all.set_index("team_id").loc[1, "PTS"] == pytest.approx(1010 / 91)
+    assert averages_all.to_pandas().set_index("team_id").loc[1, "PTS"] == pytest.approx(1010 / 91)
 
 
 @pytest.mark.asyncio
@@ -186,7 +189,7 @@ async def test_scoreboard_is_not_asked_before_1h45_after_tip(provider, flag_on, 
     monkeypatch.setattr(live_overlay_service, "_now_ms", lambda: TIP_24 + 60 * 60 * 1000)
     averages = await provider.get_averages_df(live=True)
     provider.scoreboard.assert_not_awaited()
-    assert averages.set_index("team_id").loc[1, "PTS"] == pytest.approx(1000 / 90)
+    assert averages.to_pandas().set_index("team_id").loc[1, "PTS"] == pytest.approx(1000 / 90)
 
 
 @pytest.mark.asyncio
@@ -211,7 +214,7 @@ async def test_scoreboard_is_not_asked_again_after_the_last_final(provider, flag
 async def test_scoreboard_failure_counts_nothing_new_as_final(provider, flag_on):
     provider.scoreboard.side_effect = RuntimeError("down")
     averages = await provider.get_averages_df(live=True)
-    assert averages.set_index("team_id").loc[1, "PTS"] == pytest.approx(1000 / 90)
+    assert averages.to_pandas().set_index("team_id").loc[1, "PTS"] == pytest.approx(1000 / 90)
 
 
 @pytest.mark.asyncio
@@ -240,7 +243,7 @@ async def test_overlay_failure_serves_official(provider, flag_on, monkeypatch):
     official = await provider.get_totals_df()
     monkeypatch.setattr(data_provider_module.lo, "apply_overlay", MagicMock(side_effect=ValueError("bug")))
     assert await provider.get_totals_df(live=True) is official
-    pd.testing.assert_frame_equal(await provider.get_averages_df(live=True), await provider.get_averages_df())
+    assert_pl_frame_equal(await provider.get_averages_df(live=True), await provider.get_averages_df())
 
 
 @pytest.mark.asyncio

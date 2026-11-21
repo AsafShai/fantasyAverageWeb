@@ -1,6 +1,8 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 import app.services.team_slot_pace as team_slot_pace_module
@@ -14,7 +16,7 @@ def mock_data_provider(monkeypatch):
         1: {'PG': 10, 'SG': 5, 'UTIL': 3},
         2: {'PG': 8},
     })
-    provider.get_totals_df = AsyncMock(return_value=pd.DataFrame({
+    provider.get_totals_df = AsyncMock(return_value=pl.DataFrame({
         'team_id': [1, 2], 'team_name': ['Team Alpha', 'Team Beta'],
     }))
     monkeypatch.setattr(team_slot_pace_module, 'DataProvider', lambda: provider)
@@ -47,8 +49,8 @@ async def test_get_team_slot_pace_df_does_not_close_shared_nba_service(mock_data
 async def test_get_team_slot_pace_df_builds_rows_per_team(mock_data_provider, mock_nba_service):
     df = await get_team_slot_pace_df()
 
-    assert set(df['team_id']) == {1, 2}
-    row1 = df[df['team_id'] == 1].iloc[0]
+    assert set(df['team_id'].to_list()) == {1, 2}
+    row1 = df.filter(pl.col('team_id') == 1).row(0, named=True)
     assert row1['team_name'] == 'Team Alpha'
     assert row1['PG'] == 10
     assert row1['SG'] == 5
@@ -78,4 +80,4 @@ async def test_get_team_slot_pace_df_unknown_team_id_gets_placeholder_name(mock_
 
     df = await get_team_slot_pace_df()
 
-    assert df.iloc[0]['team_name'] == 'Team 99'
+    assert df.row(0, named=True)['team_name'] == 'Team 99'

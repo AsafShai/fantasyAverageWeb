@@ -1,6 +1,8 @@
 import json
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.utils import category_storage

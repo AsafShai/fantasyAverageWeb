@@ -56,6 +56,7 @@ from app.models.activity_models import (
 from app.services.data_transformer import DataTransformer
 from app.services.stint_value import StintValuer
 from app.utils.espn_stat_map import STAT_ID_TO_CATEGORY
+from app.utils import background_tasks
 from app.utils.ssl_context import shared_ssl_context
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,12 @@ MIN_RELEASED_GAMES = 5
 CARDS_TTL_SECONDS = 5 * 60
 STATS_TTL_SECONDS = 30 * 60
 SCHEDULE_TTL_SECONDS = 24 * 60 * 60
+# A built feed this recently checked is served while a due refresh runs in the
+# background: the refresh is up to 11 ESPN round trips (mostly 304s) held under
+# the cache lock, 1.3-2.5 s in production, and the visitor who arrived after a
+# TTL used to wait for all of it. Past this (an idle stretch), the request
+# refreshes in the foreground as before.
+STALE_SERVE_SECONDS = 60 * 60
 FETCH_CONCURRENCY = 4
 FETCH_RETRIES = 2
 
@@ -683,6 +690,8 @@ class _ActivityCache:
         self.merged: Optional[tuple[list[dict], dict[int, str]]] = None
         self.merged_version = -1
         self.lock = asyncio.Lock()
+        # A background refresh was spawned and has not taken the lock yet.
+        self.refreshing = False
 
     def clear(self) -> None:
         self.__init__()
@@ -847,7 +856,39 @@ class LeagueActivityService:
         except DataSourceError as e:
             logger.warning(f"League activity warm-up failed, will retry on first request: {e}")
 
+    @staticmethod
+    def _refresh_due(now: float) -> bool:
+        return (
+            _cache.cards is None
+            or now - _cache.cards_at >= CARDS_TTL_SECONDS
+            or now - _cache.stats_at >= STATS_TTL_SECONDS
+            or _cache.schedule is None
+            or now - _cache.schedule_at >= SCHEDULE_TTL_SECONDS
+        )
+
     async def get_activity(self) -> LeagueActivity:
+        """The feed; when one is built and a refresh is due (or already
+        running), that feed is returned at once and the refresh runs behind it."""
+        now = time.monotonic()
+        if (
+            _cache.result is not None
+            and now - _cache.cards_at < STALE_SERVE_SECONDS
+            and (_cache.lock.locked() or self._refresh_due(now))
+        ):
+            if not _cache.lock.locked() and not _cache.refreshing:
+                _cache.refreshing = True
+
+                async def run() -> None:
+                    try:
+                        await self._get_activity_locked()
+                    finally:
+                        _cache.refreshing = False
+
+                background_tasks.spawn(run(), name="league-activity-refresh")
+            return _cache.result
+        return await self._get_activity_locked()
+
+    async def _get_activity_locked(self) -> LeagueActivity:
         async with _cache.lock:
             try:
                 await self._refresh()

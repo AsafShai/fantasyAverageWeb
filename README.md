@@ -59,7 +59,7 @@ Interactive trade analysis tool for comparing players between teams with compreh
 - PostgreSQL (Neon) — persistent injury status, snapshots
 - OpenAI (GPT-4o-mini) — trade suggestions (disabled for now)
 - ESPN site API — game logs, schedule, rosters (defensive ranks/pace computed from our own store)
-- pandas — data processing
+- Polars + NumPy — data processing (pandas only in the offline research/training code)
 - pytest — testing
 
 ### Frontend

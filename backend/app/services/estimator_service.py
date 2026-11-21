@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import pandas as pd
+import polars as pl
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -8,6 +8,7 @@ from app.config import settings
 from app.services.db_service import DBService
 from app.services.nba_stats_service import NBAStatsService
 from app.services.team_slot_pace import get_team_slot_pace_df
+from app.utils.frames import records_frame
 from app.services.slot_games_estimator import SlotGamesEstimator
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class EstimatorService:
             self._run_lock = asyncio.Lock()
             EstimatorService._initialized = True
 
-    async def _get_snapshot_df(self) -> pd.DataFrame:
+    async def _get_snapshot_df(self) -> pl.DataFrame:
         pool = await self.db_service._get_pool()
         if pool is None:
             raise RuntimeError("DB pool unavailable")
@@ -61,10 +62,9 @@ class EstimatorService:
             )
         if not rows:
             raise RuntimeError("No snapshot data in DB")
-        df = pd.DataFrame([dict(r) for r in rows])
-        df.insert(0, 'id', range(len(df)))
-        df['created_at'] = datetime.now()
-        return df
+        df = records_frame(rows)
+        return df.select(pl.Series('id', range(df.height), dtype=pl.Int64), pl.all()).with_columns(
+            pl.lit(datetime.now()).alias('created_at'))
 
     async def _get_nba_avg_pace(self) -> float:
         try:
@@ -138,9 +138,9 @@ class EstimatorService:
             )
 
             self._cache = {
-                "predictions": prediction_df.to_dict(orient='records'),
-                "rankings": ranking_df.to_dict(orient='records'),
-                "rank_probabilities": rank_prob_df.to_dict(orient='records'),
+                "predictions": prediction_df.to_dicts(),
+                "rankings": ranking_df.to_dicts(),
+                "rank_probabilities": rank_prob_df.to_dicts(),
             }
             self._cache_date = latest
             self._results_current = True

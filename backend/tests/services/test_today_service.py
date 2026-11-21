@@ -2,6 +2,8 @@ import logging
 from datetime import date
 
 import pandas as pd
+
+import polars as pl
 import pytest
 
 from app.models.injury_models import InjuryRecord
@@ -23,7 +25,7 @@ def rankings_row(period, team_id, name, **cats):
 
 
 def players_df(rows):
-    return pd.DataFrame(rows)
+    return pl.DataFrame(rows)
 
 
 def injury(player, status, team='LAL'):
@@ -202,17 +204,114 @@ class TestRankChanges:
         await service.get_rank_changes(mode)
         assert service.db_service.get_latest_two_periods_rankings.await_args.args[2] == table
 
-    @pytest.mark.asyncio
-    async def test_settled_changes_ignore_a_live_slate(self):
-        from unittest.mock import AsyncMock, patch
+
+
+class TestSettledRankChanges:
+    """settled=True is the daily recap: the moves of the newest night in the
+    nightly ledger, never a slate in progress."""
+
+    NIGHT = date(2026, 11, 19)
+
+    def _service(self, night=NIGHT, stored_period=None, ledger_error=False):
+        from unittest.mock import AsyncMock, MagicMock
+        from app.models import RankChanges
+        from app.services import tonight_changes
 
         service = TodayService()
-        stored = object()
+        run = None if night is None else {'game_date': night, 'status': 'processed'}
+        service.db_service = MagicMock(get_latest_model_nightly_run=AsyncMock(
+            side_effect=RuntimeError('db down') if ledger_error else None, return_value=run))
+        if stored_period is None and night is not None:
+            stored_period = tonight_changes.period_of(night) - 1      # ESPN not rolled over yet
+        stored = RankChanges(previous_period=(stored_period or 1) - 1, latest_period=stored_period)
         service._stored_rank_changes = AsyncMock(return_value=stored)
-        with patch('app.services.today_service.DataProvider') as provider:
+        return service, stored
+
+    @staticmethod
+    def _state(night, final, total, active=True):
+        from app.services import tonight_changes
+        from app.services.live_overlay_service import LiveState
+        return LiveState(active=active, period=tonight_changes.period_of(night), as_of=None,
+                         games_total=total, games_live=total - final, games_final=final,
+                         official_updated_at=None)
+
+    async def _run(self, service, state, tonight=None, synced=False):
+        from unittest.mock import AsyncMock, MagicMock, patch
+        provider = MagicMock(get_live_state=AsyncMock(return_value=state),
+                             sync_db_now=AsyncMock(return_value=synced))
+        with patch('app.services.today_service.DataProvider', return_value=provider), \
+             patch('app.services.today_service.tonight_changes.tonight_rank_changes',
+                   AsyncMock(return_value=tonight)) as live_moves:
             result = await service.get_rank_changes('averages', settled=True)
-        provider.assert_not_called()
+        return result, live_moves, provider
+
+    @pytest.mark.asyncio
+    async def test_the_finished_night_before_the_rollover_comes_from_the_live_overlay(self):
+        service, _ = self._service()
+        tonight = object()
+        result, live_moves, _ = await self._run(service, self._state(self.NIGHT, final=4, total=4), tonight)
+        assert result is tonight
+        from app.services import tonight_changes
+        assert live_moves.await_args.args[1:] == ('averages', tonight_changes.period_of(self.NIGHT))
+
+    @pytest.mark.asyncio
+    async def test_a_slate_still_in_progress_is_ignored(self):
+        """The case settled exists for: the night's games are not all final."""
+        service, stored = self._service()
+        result, live_moves, _ = await self._run(service, self._state(self.NIGHT, final=3, total=4), object())
         assert result is stored
+        live_moves.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_the_next_nights_slate_is_ignored_even_when_final(self):
+        """The ledger is still on last night while tonight's games are live or
+        done (the nightly hasn't run yet): the recap stays on the ledger night."""
+        from datetime import timedelta
+        service, stored = self._service(stored_period=None)
+        nxt = self._state(self.NIGHT + timedelta(days=1), final=5, total=5)
+        result, live_moves, _ = await self._run(service, nxt, object())
+        assert result is stored
+        live_moves.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_inactive_live_state_or_flag_off_falls_back_to_the_stored_periods(self):
+        for state in (None, self._state(self.NIGHT, final=4, total=4, active=False)):
+            service, stored = self._service()
+            result, live_moves, _ = await self._run(service, state, object())
+            assert result is stored
+            live_moves.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_live_moves_unavailable_falls_back_to_the_stored_periods(self):
+        service, stored = self._service()
+        result, _, _ = await self._run(service, self._state(self.NIGHT, final=4, total=4), tonight=None)
+        assert result is stored
+
+    @pytest.mark.asyncio
+    async def test_after_the_rollover_an_unwritten_snapshot_is_synced_then_reread(self):
+        service, stored = self._service()
+        # ESPN moved on: the live state is the next period, nothing started.
+        from datetime import timedelta
+        state = self._state(self.NIGHT + timedelta(days=1), final=0, total=5, active=False)
+        result, _, provider = await self._run(service, state, synced=True)
+        provider.sync_db_now.assert_awaited_once()
+        assert service._stored_rank_changes.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_stored_periods_that_hold_the_night_need_no_sync(self):
+        from app.services import tonight_changes
+        service, stored = self._service(stored_period=tonight_changes.period_of(self.NIGHT))
+        result, live_moves, provider = await self._run(service, None)
+        assert result is stored
+        provider.sync_db_now.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_unreadable_ledger_serves_the_stored_periods(self):
+        service, stored = self._service(ledger_error=True)
+        result, live_moves, provider = await self._run(service, self._state(self.NIGHT, 4, 4), object())
+        assert result is stored
+        live_moves.assert_not_awaited()
+        provider.sync_db_now.assert_not_awaited()
 
 
 class TestClassifyStatus:
@@ -357,7 +456,7 @@ class TestRosterHealth:
         assert team.games_tonight == 5
 
     def test_empty_frame_is_no_rows(self):
-        assert TodayService.build_roster_health(pd.DataFrame(), {'LAL'}, {}) == []
+        assert TodayService.build_roster_health(pl.DataFrame(), {'LAL'}, {}) == []
 
     def test_injury_lookup_maps_every_record_to_one_of_the_five(self, monkeypatch):
         store = {
