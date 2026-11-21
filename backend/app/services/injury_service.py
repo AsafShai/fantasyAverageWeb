@@ -718,7 +718,9 @@ def _reconcile_table_with_report(
             if row is not None:
                 _queue_delete(record.team, record.player)
                 queued += 1
-        elif row is None or row.get("status") != record.status or row.get("injury_reason") != record.injury:
+        # Status only, like compute_diff: the upsert stamps last_updated on a
+        # reason-only change too, and last_updated means "status last changed".
+        elif row is None or row.get("status") != record.status:
             _queue_upsert(record)
             queued += 1
     for key, row in stored.items():

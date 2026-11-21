@@ -518,6 +518,14 @@ class TestStartupReconcile:
         assert inj._pending_db_writes == {"BOS|Old": ("BOS", "Old")}
 
     @pytest.mark.asyncio
+    async def test_reason_only_change_queues_nothing(self, monkeypatch):
+        """last_updated means "status last changed": a new reason text with the
+        same status must not get a fresh stamp from a restart."""
+        await self._init(monkeypatch, [self._row("Same", reason="Ankle")],
+                         inj.InjuryReport([_rec(player="Same")]))
+        assert inj._pending_db_writes == {}
+
+    @pytest.mark.asyncio
     async def test_matching_table_queues_nothing(self, monkeypatch):
         await self._init(monkeypatch, [self._row("Same")], inj.InjuryReport([_rec(player="Same")]))
         assert inj._pending_db_writes == {}
