@@ -209,6 +209,13 @@ class DataProvider:
                     return self.cache_manager.totals_cache['data']
                 return await self._fallback_from_db()
 
+    def known_snapshot_period(self) -> int:
+        """Newest period this process knows the DB holds a daily snapshot for
+        (written or seen by sync_db_now); 0 before either has happened. Only
+        this process writes the snapshot, so it moves exactly when a new one
+        lands."""
+        return max(self._last_synced_period, self._snapshot_known_period)
+
     async def sync_db_now(self) -> bool:
         """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
         async with self._fetch_lock:
@@ -247,7 +254,7 @@ class DataProvider:
                 return False
 
         completed_period = scoring_period_id - 1
-        if max(self._last_synced_period, self._snapshot_known_period) >= completed_period:
+        if self.known_snapshot_period() >= completed_period:
             self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
             return False
         max_snap = await self.db_service.get_db_max_scoring_period(
