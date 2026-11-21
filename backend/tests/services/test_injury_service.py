@@ -297,3 +297,118 @@ class TestLegacyTeamRename:
         await inj.initialize()
 
         assert inj.injury_store["Philadelphia 76ers|Joel Embiid"].last_update == "2026-10-20T10:00:00+00:00"
+
+
+class TestBatchedDbWrites:
+    """Report changes go to the table at most once an hour (and on shutdown),
+    so a 15-minute poll with changes does not wake the database."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_queue(self, monkeypatch):
+        monkeypatch.setattr(inj, "_pending_db_writes", {})
+        monkeypatch.setattr(inj, "_last_db_flush", None)
+
+    def _db(self):
+        from unittest.mock import AsyncMock, MagicMock
+
+        return MagicMock(
+            upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
+            get_injury_statuses_for_teams=AsyncMock(return_value=[]),
+        )
+
+    async def _apply_report(self, monkeypatch, db, store, new):
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(inj, "injury_store", store)
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport(new))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "broadcast_notifications", AsyncMock())
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", MagicMock())
+        assert await inj._try_update_injury_data() is True
+
+    @pytest.mark.asyncio
+    async def test_report_changes_are_queued_not_written(self, monkeypatch):
+        db = self._db()
+        await self._apply_report(
+            monkeypatch, db,
+            {"LAL|Gone": _rec(player="Gone"), "LAL|Changed": _rec(player="Changed")},
+            [_rec(player="Changed", status="Questionable"), _rec(player="New")],
+        )
+        db.upsert_injury_status.assert_not_awaited()
+        db.delete_injury_status.assert_not_awaited()
+        assert set(inj._pending_db_writes) == {"LAL|Gone", "LAL|Changed", "LAL|New"}
+
+        assert await inj.flush_pending_db_writes() == 3
+        assert {c.args[0].player for c in db.upsert_injury_status.await_args_list} == {"Changed", "New"}
+        db.delete_injury_status.assert_awaited_once_with("LAL", "Gone")
+        assert inj._pending_db_writes == {}
+
+    @pytest.mark.asyncio
+    async def test_newest_change_per_player_wins(self, monkeypatch):
+        db = self._db()
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        inj._pending_db_writes["LAL|A"] = _rec(player="A", status="Out")
+        inj._pending_db_writes["LAL|A"] = ("LAL", "A")
+        await inj.flush_pending_db_writes()
+        db.upsert_injury_status.assert_not_awaited()
+        db.delete_injury_status.assert_awaited_once_with("LAL", "A")
+
+    @pytest.mark.asyncio
+    async def test_failed_write_is_requeued(self, monkeypatch):
+        from unittest.mock import AsyncMock
+
+        db = self._db()
+        db.upsert_injury_status = AsyncMock(side_effect=RuntimeError("down"))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        rec = _rec(player="A")
+        inj._pending_db_writes["LAL|A"] = rec
+        await inj.flush_pending_db_writes()
+        assert inj._pending_db_writes == {"LAL|A": rec}
+
+    @pytest.mark.asyncio
+    async def test_flush_waits_an_hour(self, monkeypatch):
+        db = self._db()
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        clock = [1000.0]
+        monkeypatch.setattr(inj.time, "monotonic", lambda: clock[0])
+
+        await inj.flush_pending_db_writes_if_due()  # first poll: nothing queued
+        inj._pending_db_writes["LAL|A"] = _rec(player="A")
+        clock[0] += inj.DB_FLUSH_INTERVAL_S - 1
+        await inj.flush_pending_db_writes_if_due()
+        db.upsert_injury_status.assert_not_awaited()
+        clock[0] += 1
+        await inj.flush_pending_db_writes_if_due()
+        db.upsert_injury_status.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_queue_is_flushed_before_reading_new_teams(self, monkeypatch):
+        """The read for teams new to memory must not see rows whose delete is
+        still queued."""
+        db = self._db()
+        inj._pending_db_writes["BOS|Old"] = ("BOS", "Old")
+        await self._apply_report(monkeypatch, db, {"LAL|A": _rec(player="A")},
+                                 [_rec(player="A"), _rec(team="BOS", player="B")])
+        db.delete_injury_status.assert_any_await("BOS", "Old")
+        db.get_injury_statuses_for_teams.assert_awaited_once_with(["BOS"])
+
+
+class TestInjuryStatusRows:
+    def test_rows_come_from_memory_without_available(self, monkeypatch):
+        monkeypatch.setattr(inj, "injury_store", {
+            "LAL|A": _rec(player="A", status="Out"),
+            "LAL|B": _rec(player="B", status="Available"),
+        })
+        assert inj.injury_status_rows() == [{"team": "LAL", "player": "A", "status": "Out"}]
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_table_before_first_report(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        monkeypatch.setattr(inj, "injury_store", {})
+        rows = [{"team": "LAL", "player": "A", "status": "Out"}]
+        monkeypatch.setattr(inj, "get_db_service",
+                            lambda: MagicMock(load_all_injury_statuses=AsyncMock(return_value=rows)))
+        assert await inj.load_injury_status_rows() == rows

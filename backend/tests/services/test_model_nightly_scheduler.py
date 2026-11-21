@@ -126,14 +126,17 @@ class Clock:
             raise _Stop
 
 
-def run_loop(monkeypatch, start, until, outcome, tips):
+def run_loop(monkeypatch, start, until, outcome, tips, over=None):
     """``tips(night, now)`` -> (last tip, scoreboard ok) as the scoreboard
-    would say at that moment."""
+    would say at that moment; ``over(night, now)`` -> whether its games are all
+    final (default: yes, so the attempt runs)."""
     clock = Clock(start, until)
     service = FakeService(clock, outcome)
     monkeypatch.setattr(sched, "_now", lambda: clock.now)
     monkeypatch.setattr(sched.asyncio, "sleep", clock.sleep)
     monkeypatch.setattr(sched, "_read_last_tip", lambda night: tips(night, clock.now))
+    monkeypatch.setattr(sched, "_read_games_over",
+                        lambda night: True if over is None else over(night, clock.now))
     monkeypatch.setattr(sched, "ModelNightlyService", lambda: service)
     monkeypatch.setattr(sched, "start_job_run", lambda name: "run")
     with pytest.raises(_Stop):
@@ -276,3 +279,41 @@ def test_read_last_tip_survives_a_malformed_event(monkeypatch):
     """Parsing is guarded like the fetch: a bad event must not end the loop."""
     monkeypatch.setattr(sched.espn_client, "scoreboard", lambda dates: {"events": [{"id": "1", "season": {"type": 2}}]})   # no competitions
     assert sched._read_last_tip(NIGHT) == (None, False)
+
+
+def test_retries_skip_the_catchup_while_games_are_on(monkeypatch):
+    """Games run long: the 00:45 and 01:00 checks see a game still on and skip
+    the catch-up (and its DB reads); the first check after the final buzzer runs."""
+    over = lambda night, now: now >= et(NEXT, 1, 10)
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 10)),
+                     tip_at(22, 30), over=over)
+    assert calls == [(et(NEXT, 1, 15), NIGHT, False), (et(NEXT, 4, 0), NIGHT, True)]
+
+
+def test_an_unreadable_scoreboard_does_not_skip_the_attempt(monkeypatch):
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 0, 45)),
+                     tip_at(22, 30), over=lambda night, now: None)
+    assert calls[0] == (et(NEXT, 0, 45), NIGHT, False)
+
+
+def test_the_deadline_attempt_runs_even_with_games_on(monkeypatch):
+    never = lambda now, night, final: "incomplete_data"
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), never, tip_at(22, 30),
+                     over=lambda night, now: False)
+    assert calls == [(et(NEXT, 4, 0), NIGHT, True)]
+
+
+def test_read_games_over(monkeypatch):
+    def event(completed):
+        return {"date": "2026-11-20T00:30Z", "season": {"type": 2},
+                "status": {"type": {"completed": completed, "name": "STATUS_FINAL" if completed else "STATUS_IN_PROGRESS"}},
+                "competitions": [{"competitors": [{"team": {"id": "1"}}, {"team": {"id": "2"}}]}]}
+    monkeypatch.setattr(sched.espn_client, "scoreboard", lambda dates: {"events": [event(True), event(False)]})
+    assert sched._read_games_over(NIGHT) is False
+    monkeypatch.setattr(sched.espn_client, "scoreboard", lambda dates: {"events": [event(True)]})
+    assert sched._read_games_over(NIGHT) is True
+
+    def boom(dates):
+        raise RuntimeError("espn down")
+    monkeypatch.setattr(sched.espn_client, "scoreboard", boom)
+    assert sched._read_games_over(NIGHT) is None

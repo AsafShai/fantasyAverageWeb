@@ -253,6 +253,16 @@ def reset_windowed_players_cache():
     _windowed_players_cache.clear()
 
 @pytest.fixture(autouse=True)
+def reset_injury_db_queue():
+    """Injury report changes queued for the hourly DB flush are module state."""
+    from app.services import injury_service
+    injury_service._pending_db_writes.clear()
+    injury_service._last_db_flush = None
+    yield
+    injury_service._pending_db_writes.clear()
+    injury_service._last_db_flush = None
+
+@pytest.fixture(autouse=True)
 def reset_surprise_read_cache():
     """The surprises read side is a module-level cache with a multi-hour TTL."""
     from app.services.surprise_service import clear_surprise_read_cache

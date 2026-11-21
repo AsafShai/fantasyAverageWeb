@@ -11,6 +11,7 @@ from app.models.projection_models import Projection, ProjectionStats
 from app.services.data_provider import DataProvider
 from app.services.db_service import DBService
 from app.services.depth_chart_service import DepthChartService
+from app.services import injury_service
 from app.services.live_projection_service import LiveProjectionService
 from app.services.nba_matchup_service import get_shared_matchup_service
 from app.utils import background_tasks
@@ -179,7 +180,7 @@ async def _build_matchups(
     if generation is None:
         generation = _cache_generation
     injury_generation = _injury_generation
-    # Independent of one another: two ESPN reads and two DB reads, so they
+    # Independent of one another: two ESPN reads, the players frame and the injury statuses, so they
     # overlap rather than queue. return_exceptions keeps each failure's
     # original handling — a slate/defense failure yields an empty response,
     # anything else still propagates.
@@ -187,7 +188,7 @@ async def _build_matchups(
         _matchup_service.get_games_today(date=date),
         _matchup_service.get_all_def_data(),
         _data_provider.get_players_df(stat_split_type_id=0),
-        DBService().load_all_injury_statuses(),
+        injury_service.load_injury_status_rows(),
         return_exceptions=True,
     )
     if isinstance(games_today, BaseException) or isinstance(all_def, BaseException):

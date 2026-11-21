@@ -159,6 +159,12 @@ async def lifespan(app: FastAPI):
     # Shutdown
     await background_tasks.cancel_all()
     try:
+        # Before the DB pool closes: the injury changes queued since the last
+        # hourly flush.
+        await injury_service.flush_pending_db_writes()
+    except Exception as e:
+        logger.error(f"Injury DB flush on shutdown failed: {type(e).__name__}: {e}")
+    try:
         data_provider = DataProvider()
         await data_provider.close()
         await NBAStatsService().close()
