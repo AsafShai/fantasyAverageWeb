@@ -887,7 +887,7 @@ async def test_get_lineup_slots_caches_within_ttl(lineup_provider):
     assert first == {10: "PG"}
     assert second is first
     assert lineup_provider._client.get.await_count == 1
-    assert lineup_provider._client.get.await_args.args[0].endswith("?view=mRoster")
+    assert lineup_provider._client.get.await_args.args[0].endswith("?view=mMatchup")
 
 
 @pytest.mark.asyncio

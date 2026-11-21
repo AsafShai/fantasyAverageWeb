@@ -83,7 +83,9 @@ class DataProvider:
             self.espn_players_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=kona_player_info'
             self.espn_draft_detail_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mDraftDetail'
             self.espn_players_directory_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/players?view=players_wl'
-            self.espn_roster_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mRoster'
+            # mMatchup, not mRoster: the same teams[].roster.entries (player id,
+            # lineup slot) without each player's full card -- ~260 kB, not ~1.9 MB.
+            self.espn_roster_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}/segments/0/leagues/{settings.league_id}?view=mMatchup'
             self.espn_pro_team_schedules_url = f'https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/{settings.season_id}?view=proTeamSchedules_wl'
 
     async def get_pro_team_schedules(self) -> Dict:
@@ -666,9 +668,10 @@ class DataProvider:
         """{espn_player_id: current lineup slot label} for every rostered player.
 
         kona_player_info (the players frame) carries no lineup slot, so this is
-        a separate mRoster fetch with its own small cache: only the parsed map
-        is kept, never the raw payload. Serves the last good map if ESPN fails,
-        and {} if there has never been one -- the slot is display-only."""
+        a separate mMatchup fetch (league rosters with lineup slots) with its
+        own small cache: only the parsed map is kept, never the raw payload.
+        Serves the last good map if ESPN fails, and {} if there has never been
+        one -- the slot is display-only."""
         async with self._lineup_slots_lock:
             cache = self.cache_manager.lineup_slots_cache
             now = time.monotonic()
