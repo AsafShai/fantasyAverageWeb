@@ -1,3 +1,4 @@
+import { waiverClear } from '../../../utils/waiverClear'
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
 import type {
   ComparisonOperator,
@@ -223,12 +224,18 @@ export default function MobilePlayers(p: MobilePlayersProps) {
     className: 'mr-pl-name',
     cell: (pl) => {
       const status = p.matchupMap.get(pl.player_name)?.injury_status
+      const clear = pl.status === 'WAIVERS' ? waiverClear(pl.waiver_clears_at) : null
       return (
         <>
           <PlayerNameLink name={pl.player_name} playerId={pl.player_id} className="mr-pl-link" />
           {status && (
             <span className="mr-pl-status">
               <StatusPill status={status} />
+            </span>
+          )}
+          {clear && (
+            <span className={`mr-pl-waiver${clear.soon ? ' mr-pl-waiver-soon' : ''}`} title={clear.full}>
+              Clears {clear.when}
             </span>
           )}
         </>

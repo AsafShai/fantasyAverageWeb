@@ -206,6 +206,8 @@ export interface Player {
   last15_rating?: number | null;
   last30_rating?: number | null;
   has_data?: boolean;
+  /** status WAIVERS only: when he clears and becomes a free agent (UTC ISO). */
+  waiver_clears_at?: string | null;
   /** Slot currently held in the fantasy lineup (PG, UTIL, BE, IR, ...); team detail only */
   lineup_slot?: string | null;
 }

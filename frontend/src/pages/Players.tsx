@@ -23,6 +23,7 @@ import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
 import { useMyTeam } from '../context/MyTeamContext';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
+import WaiverClearTag from '../components/WaiverClearTag';
 import PlayerNameLink from '../components/PlayerNameLink';
 import { parseStatFilterValue, passesStatFilter } from '../utils/statFilter';
 import { FF_PAST_SLATES } from '../config/featureFlags';
@@ -746,7 +747,10 @@ const PlayerTable = ({
                 <td><PlayerNameLink name={player.player_name} playerId={player.player_id} /> <InjuryBadge status={matchup?.injury_status} /></td>
                 <td>{player.pro_team}</td>
                 <td>{player.positions.join(', ')}</td>
-                <td>{getTeamDisplay(player)}</td>
+                <td>
+                  {getTeamDisplay(player)}
+                  {player.status === 'WAIVERS' && <> <WaiverClearTag clearsAt={player.waiver_clears_at} /></>}
+                </td>
                 {showSchedule ? (
                   <>
                     {weekDays.map(day => (
