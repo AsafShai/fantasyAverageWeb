@@ -56,6 +56,13 @@ class DataProvider:
             self._fetch_lock = asyncio.Lock()
             self._db_sync_lock = asyncio.Lock()
             self._last_synced_period = 0
+            # Newest period the DB is known to hold a daily snapshot for. The
+            # table only grows, so once seen it saves sync_db_now a query on
+            # every call for the rest of that day.
+            self._snapshot_known_period = 0
+            # Bumped after each write to the rankings/snapshot tables, so readers
+            # caching those tables (TodayService) know to read them again.
+            self.rankings_writes = 0
             self._players_inflight: dict[int, asyncio.Future] = {}
             self._lineup_slots_lock = asyncio.Lock()
             # Averages/rankings are pure functions of the cached totals frame;
@@ -202,6 +209,13 @@ class DataProvider:
                     return self.cache_manager.totals_cache['data']
                 return await self._fallback_from_db()
 
+    def known_snapshot_period(self) -> int:
+        """Newest period this process knows the DB holds a daily snapshot for
+        (written or seen by sync_db_now); 0 before either has happened. Only
+        this process writes the snapshot, so it moves exactly when a new one
+        lands."""
+        return max(self._last_synced_period, self._snapshot_known_period)
+
     async def sync_db_now(self) -> bool:
         """Fetch from ESPN and synchronously await the DB sync. Returns True if new data was written."""
         async with self._fetch_lock:
@@ -240,9 +254,13 @@ class DataProvider:
                 return False
 
         completed_period = scoring_period_id - 1
+        if self.known_snapshot_period() >= completed_period:
+            self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
+            return False
         max_snap = await self.db_service.get_db_max_scoring_period(
             'team_daily_snapshot', settings.league_id, settings.season_id
         )
+        self._snapshot_known_period = max(self._snapshot_known_period, max_snap)
         if max_snap >= completed_period:
             self.logger.info(f"sync_db_now: snapshot already current (period {completed_period}), skipping")
             return False
@@ -927,6 +945,7 @@ class DataProvider:
                 if tasks:
                     self.logger.info(f"DB sync: writing {len(tasks)} table(s) for completed period {completed_period}")
                     await asyncio.gather(*tasks)
+                    self.rankings_writes += 1
                 self._last_synced_period = completed_period
             except Exception as e:
                 self.logger.error(f"DB sync failed for scoring_period_id={scoring_period_id}: {type(e).__name__}: {e}", exc_info=True)

@@ -58,8 +58,36 @@ _hub_cache: dict[str, Any] = {'ts': None, 'value': None, 'inputs': None}
 _injury_generation = 0
 
 
+# Results of the hub's and the Rankings table's DB reads, one entry per query.
+# The tables they read change once a day (the standings sync, the nightly
+# run), and each read wakes the scale-to-zero database for at least five
+# minutes, so page views reuse them until a write bumps
+# DataProvider.rankings_writes, the nightly clears them, or an hour passes.
+_DB_READ_TTL_S = 3600
+_db_reads: dict[Any, tuple[float, int, Any]] = {}
+
+
+def _rankings_writes() -> int:
+    return getattr(DataProvider(), 'rankings_writes', 0)
+
+
+async def _cached_db_read(key, read, keep=bool):
+    """read()'s result, reused while fresh. A result ``keep`` rejects is not
+    stored: the DB helpers return an empty value on failure, and that must not
+    stick for an hour."""
+    writes = _rankings_writes()
+    hit = _db_reads.get(key)
+    if hit is not None and hit[1] == writes and time.monotonic() - hit[0] < _DB_READ_TTL_S:
+        return hit[2]
+    value = await read()
+    if keep(value):
+        _db_reads[key] = (time.monotonic(), writes, value)
+    return value
+
+
 def clear_today_hub_cache() -> None:
     _hub_cache.update({'ts': None, 'value': None, 'inputs': None})
+    _db_reads.clear()
 
 
 def refresh_roster_health() -> None:
@@ -157,8 +185,9 @@ class TodayService:
             return fallback
 
     async def _get_movers(self) -> list[RankMover]:
-        rows = await self.db_service.get_latest_two_periods_rankings(
-            settings.league_id, settings.season_id
+        rows = await _cached_db_read(
+            ('two_periods', 'team_rankings_averages'),
+            lambda: self.db_service.get_latest_two_periods_rankings(settings.league_id, settings.season_id),
         )
         return self.build_movers(rows)
 
@@ -217,7 +246,7 @@ class TodayService:
         provider = DataProvider()
         night = None
         try:
-            run = await self.db_service.get_latest_model_nightly_run()
+            run = await self._latest_nightly_run()
             night = run.get('game_date') if run else None
             if isinstance(night, str):
                 night = date.fromisoformat(night)
@@ -235,7 +264,16 @@ class TodayService:
                 changes = await self._stored_rank_changes(mode)
         return changes
 
+    async def _latest_nightly_run(self) -> Optional[dict]:
+        return await _cached_db_read('nightly_run', self.db_service.get_latest_model_nightly_run)
+
     async def _stored_rank_changes(self, mode: str) -> RankChanges:
+        return await _cached_db_read(
+            ('rank_changes', mode), lambda: self._read_rank_changes(mode),
+            keep=lambda changes: changes.latest_period is not None,
+        )
+
+    async def _read_rank_changes(self, mode: str) -> RankChanges:
         table = 'team_rankings_totals' if mode == 'totals' else 'team_rankings_averages'
         rows = await self.db_service.get_latest_two_periods_rankings(
             settings.league_id, settings.season_id, table
@@ -382,7 +420,7 @@ class TodayService:
         return health
 
     async def _get_last_nightly(self) -> Optional[NightlyRun]:
-        run = await self.db_service.get_latest_model_nightly_run()
+        run = await self._latest_nightly_run()
         if not run or run.get('game_date') is None:
             return None
         return NightlyRun(

@@ -19,6 +19,16 @@ _NBA_AVG_PACE_FALLBACK = 65.9
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 
+def _known_snapshot_period() -> int:
+    """DataProvider.known_snapshot_period(), or 0 when unknown."""
+    from app.services.data_provider import DataProvider
+    known = getattr(DataProvider(), 'known_snapshot_period', None)
+    try:
+        return int(known()) if callable(known) else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 class EstimatorService:
     _instance = None
     _initialized = False
@@ -42,6 +52,12 @@ class EstimatorService:
             # _cache_date is only set once the Monte Carlo finishes, so without
             # this every caller arriving mid-run would start its own run.
             self._run_lock = asyncio.Lock()
+            # DataProvider.known_snapshot_period() when results were last found
+            # (or made) current. While it has not moved there is no new
+            # snapshot, so a run skips its DB reads: the morning's eleven
+            # scheduler slots would otherwise wake the scale-to-zero database
+            # eleven times to learn there is nothing to do.
+            self._current_through_period: int | None = None
             EstimatorService._initialized = True
 
     async def _get_snapshot_df(self) -> pl.DataFrame:
@@ -100,6 +116,18 @@ class EstimatorService:
             return await self._run_and_store_locked()
 
     async def _run_and_store_locked(self, force: bool = False) -> bool:
+        known_period = _known_snapshot_period()
+        if (not force and known_period and self._current_through_period is not None
+                and known_period <= self._current_through_period):
+            logger.info(f"Estimator: no snapshot newer than period {known_period}, skipping")
+            self._results_current = True
+            return False
+        result = await self._run_and_store_checked(force)
+        if self._results_current and known_period:
+            self._current_through_period = known_period
+        return result
+
+    async def _run_and_store_checked(self, force: bool = False) -> bool:
         latest = await self.db_service.get_latest_snapshot_date(settings.league_id, settings.season_id)
         if latest is None:
             logger.info("No snapshot data yet, skipping estimator run")

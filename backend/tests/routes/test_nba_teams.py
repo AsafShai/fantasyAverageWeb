@@ -42,7 +42,7 @@ def _depthchart_json():
     }
 
 
-@patch("app.routes.nba_teams.get_db_service")
+@patch("app.services.injury_service.get_db_service")
 def test_list_nba_teams(mock_get_db, test_client):
     response = test_client.get("/api/nba-teams/")
     assert response.status_code == 200
@@ -54,7 +54,7 @@ def test_list_nba_teams(mock_get_db, test_client):
     assert "team_name" in data[0]
 
 
-@patch("app.routes.nba_teams.get_db_service")
+@patch("app.services.injury_service.get_db_service")
 @patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
 def test_depthchart_success(mock_get_raw, mock_get_db, test_client):
     mock_get_raw.return_value = _depthchart_json()
@@ -73,7 +73,7 @@ def test_depthchart_success(mock_get_raw, mock_get_db, test_client):
     assert body["positions"][0]["players"][0]["display_name"] == "Test Player"
 
 
-@patch("app.routes.nba_teams.get_db_service")
+@patch("app.services.injury_service.get_db_service")
 @patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
 def test_depthchart_espn_404(mock_get_raw, mock_get_db, test_client):
     mock_get_raw.side_effect = DepthChartFetchError(99, is_network_error=False)
@@ -83,7 +83,7 @@ def test_depthchart_espn_404(mock_get_raw, mock_get_db, test_client):
     assert response.status_code == 404
 
 
-@patch("app.routes.nba_teams.get_db_service")
+@patch("app.services.injury_service.get_db_service")
 @patch("app.routes.nba_teams._depth_chart_service.get_depth_chart_raw")
 def test_depthchart_timeout_502(mock_get_raw, mock_get_db, test_client):
     mock_get_raw.side_effect = DepthChartFetchError(13, is_network_error=True)

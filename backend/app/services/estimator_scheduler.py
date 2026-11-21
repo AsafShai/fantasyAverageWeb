@@ -13,7 +13,9 @@ logger = logging.getLogger(__name__)
 # on New York time: the new scoring period showed up around 03:00 ET on every
 # morning checked (Nov 2026 logs; 08:00-08:45 UTC). The slots are New York
 # times so they follow it through both countries' clock changes. A slot after
-# the morning's work is done costs one conditional ESPN request and a DB read.
+# the morning's work is done costs one conditional ESPN request: the snapshot
+# period known in memory tells both sync_db_now and the estimator there is
+# nothing new, so the slot does not wake the database.
 EASTERN = ZoneInfo("America/New_York")
 SCHEDULE_TIMES = [(2, 30), (2, 45), (3, 0), (3, 15), (3, 30), (3, 45),
                   (4, 0), (4, 15), (4, 30), (4, 45), (5, 0)]
