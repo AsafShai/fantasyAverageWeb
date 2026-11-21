@@ -22,6 +22,7 @@ from app.services.db_service import DBService
 from app.services.roster_stints.feed import FeedRow, FeedUnavailable, fetch_feed
 from app.services.roster_stints.matching import EspnPlayer, FeedPlayer, match_players
 from app.services.roster_stints.replay import Stint, build_stints, clip_to_season, feed_intervals, offseason_start
+from app.utils.ssl_context import shared_ssl_context
 from model_stats_inference.espn import client as espn_client
 from model_stats_inference.espn.games import season_for
 from model_stats_inference.espn.teams import TEAM_IDS
@@ -82,7 +83,7 @@ async def _fetch_espn_rosters() -> dict[int, tuple[str, int]]:
             out[pid] = (str(a.get("displayName", "")), team_id)
             roster_positions[pid] = str((a.get("position") or {}).get("abbreviation", ""))
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(verify=shared_ssl_context()) as client:
         await asyncio.gather(*(one(client, t) for t in sorted(TEAM_IDS)))
     return out
 
