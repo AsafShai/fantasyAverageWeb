@@ -297,3 +297,66 @@ async def test_force_waits_for_a_run_in_flight_then_runs(estimator_service, monk
     assert await estimator_service.run_and_store(force=True) is True
     assert await first is True
     assert fake_est.return_value.estimate.call_count == 2
+
+
+class TestSkipsDbWhileNoNewSnapshot:
+    """The morning scheduler slots ask the estimator to run every 15 minutes;
+    while the snapshot period known in memory has not moved, a run must not
+    read the database (each read wakes Neon for at least 5 minutes)."""
+
+    def _service(self, monkeypatch, known):
+        from datetime import date as _date
+        from app.services import estimator_service as module
+
+        svc = EstimatorService()
+        svc.db_service = MagicMock(
+            get_latest_snapshot_date=AsyncMock(return_value=_date(2026, 11, 20)),
+            get_estimator_as_of=AsyncMock(return_value=_date(2026, 11, 20)),
+        )
+        monkeypatch.setattr(module, "_known_snapshot_period", lambda: known[0])
+        return svc
+
+    @pytest.mark.asyncio
+    async def test_second_slot_skips_the_db(self, monkeypatch):
+        known = [32]
+        svc = self._service(monkeypatch, known)
+        assert await svc.run_and_store() is False      # stored results already cover it
+        assert await svc.run_and_store() is False
+        svc.db_service.get_latest_snapshot_date.assert_awaited_once()
+        assert svc._results_current is True
+
+    @pytest.mark.asyncio
+    async def test_a_new_period_reads_again(self, monkeypatch):
+        known = [32]
+        svc = self._service(monkeypatch, known)
+        await svc.run_and_store()
+        known[0] = 33
+        await svc.run_and_store()
+        assert svc.db_service.get_latest_snapshot_date.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_unknown_period_always_reads(self, monkeypatch):
+        known = [0]
+        svc = self._service(monkeypatch, known)
+        await svc.run_and_store()
+        await svc.run_and_store()
+        assert svc.db_service.get_latest_snapshot_date.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_results_yet_reads_again(self, monkeypatch):
+        """A slot that found no snapshot (or failed) must not stop later slots."""
+        known = [32]
+        svc = self._service(monkeypatch, known)
+        svc.db_service.get_latest_snapshot_date = AsyncMock(return_value=None)
+        await svc.run_and_store()
+        await svc.run_and_store()
+        assert svc.db_service.get_latest_snapshot_date.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_force_always_reads(self, monkeypatch):
+        known = [32]
+        svc = self._service(monkeypatch, known)
+        await svc.run_and_store()
+        svc._run_and_store_checked = AsyncMock(return_value=True)
+        await svc.run_and_store(force=True)
+        svc._run_and_store_checked.assert_awaited_once_with(True)

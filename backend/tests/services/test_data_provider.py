@@ -155,6 +155,42 @@ async def test_sync_db_now_returns_false_when_snapshot_current(provider):
 
 
 @pytest.mark.asyncio
+async def test_sync_db_now_asks_the_db_once_per_period(provider):
+    """Once the DB is known to hold the period's snapshot, later calls that day
+    skip the query, so page views do not wake the database."""
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {}
+    mock_resp.json.return_value = {"scoringPeriodId": 10, "teams": _api_teams_payload()["teams"]}
+    provider._client.get = AsyncMock(return_value=mock_resp)
+    provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=9)
+
+    assert await provider.sync_db_now() is False
+    assert await provider.sync_db_now() is False
+    provider.db_service.get_db_max_scoring_period.assert_awaited_once()
+
+    # A new period is unknown again: one query, then the write path.
+    mock_resp.json.return_value = {"scoringPeriodId": 11, "teams": _api_teams_payload()["teams"]}
+    provider._sync_db_if_needed = AsyncMock(return_value=True)
+    assert await provider.sync_db_now() is True
+    assert provider.db_service.get_db_max_scoring_period.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_db_now_skips_the_db_after_its_own_write(provider):
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.headers = {}
+    mock_resp.json.return_value = {"scoringPeriodId": 10, "teams": _api_teams_payload()["teams"]}
+    provider._client.get = AsyncMock(return_value=mock_resp)
+    provider.db_service.get_db_max_scoring_period = AsyncMock(return_value=0)
+    provider._last_synced_period = 9
+
+    assert await provider.sync_db_now() is False
+    provider.db_service.get_db_max_scoring_period.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_get_players_df_fetch_error_raises(provider):
     provider.cache_manager.totals_cache["data"] = pl.DataFrame({"team_id": [1], "team_name": ["X"]})
     provider._client.get = AsyncMock(side_effect=httpx.ConnectError("x"))

@@ -7,7 +7,9 @@ A night is the US Eastern date ESPN files its games under. For each night:
     (a game runs ~2h15: the first check lands near the final buzzer, and
     the 15-minute retries pick up a game that runs longer);
   * while the night is not in the ledger yet (a game ran long, ESPN is late, a
-    run failed), another attempt every RETRY_EVERY;
+    run failed), another attempt every RETRY_EVERY; an attempt before the
+    deadline is skipped while the scoreboard still shows a game on, so it
+    doesn't touch the database;
   * a final attempt at DEADLINE (04:00 ET the next morning, ~11:00 Israel) that
     always runs: one last try for a stuck night, and the second roster-stints
     rebuild of the day, for transactions filed after midnight ET.
@@ -121,6 +123,20 @@ def _read_last_tip(night: date) -> tuple[Optional[datetime], bool]:
         return None, False
 
 
+def _read_games_over(night: date) -> Optional[bool]:
+    """Whether every expected game of ``night`` is final on the scoreboard;
+    None when it can't be read. Blocking, run in a thread. Asked before a
+    retry so that one made while games are still on costs an ESPN request
+    instead of a catch-up, whose ledger reads wake the scale-to-zero database
+    every 15 minutes."""
+    try:
+        scoreboard = espn_client.scoreboard(night.strftime("%Y%m%d"))
+        return all(espn_games.is_final(e) for e in espn_games.expected_events(scoreboard))
+    except Exception as e:
+        logger.warning(f"Model nightly scheduler: scoreboard for {night} unavailable ({type(e).__name__}: {e})")
+        return None
+
+
 async def _plan(night: date) -> NightPlan:
     tip, ok = await asyncio.to_thread(_read_last_tip, night)
     return plan_night(night, tip, ok)
@@ -151,6 +167,12 @@ async def start_scheduler():
             )
             await asyncio.sleep(wait.total_seconds())
             continue   # re-plan: a tip-off may have moved
+
+        if not is_final and not done and plan.source == "tip":
+            if await asyncio.to_thread(_read_games_over, night) is False:
+                logger.info(f"Model nightly scheduler: night {night} still has games on; next check in 15 min")
+                last_attempt = _now()
+                continue
 
         start_job_run("model-nightly")
         logger.info(f"Model nightly scheduler triggered: night {night}{' (final attempt)' if is_final else ''}")

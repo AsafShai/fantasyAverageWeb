@@ -59,6 +59,11 @@ def mock_services(monkeypatch):
             get_recent_game_dates=AsyncMock(return_value=[]),
         ),
     )
+    from app.services import injury_service
+    monkeypatch.setattr(
+        injury_service, 'get_db_service',
+        lambda: MagicMock(load_all_injury_statuses=AsyncMock(return_value=[])),
+    )
     return svc, provider
 
 
@@ -120,9 +125,25 @@ def test_tags_player_not_on_depth_chart(mock_services, monkeypatch):
     assert data[0]['on_depth_chart'] is False
 
 
-def test_tags_injury_status_from_db(mock_services, monkeypatch):
+def test_tags_injury_status_from_memory_without_db(mock_services, monkeypatch):
+    from app.services import injury_service
+
+    monkeypatch.setattr(injury_service, '_table_rows', {
+        'LAL|Anthony Davis': {'team': 'LAL', 'player': 'Anthony Davis', 'status': 'Out'},
+    })
+    db = MagicMock(load_all_injury_statuses=AsyncMock(return_value=[]))
+    monkeypatch.setattr(injury_service, 'get_db_service', lambda: db)
+    client = TestClient(app)
+    data = client.get('/api/matchups/today').json()
+    assert data[0]['injury_status'] == 'Out'
+    db.load_all_injury_statuses.assert_not_awaited()
+
+
+def test_tags_injury_status_from_db_before_first_report(mock_services, monkeypatch):
+    from app.services import injury_service
+
     monkeypatch.setattr(
-        'app.routes.matchups.DBService',
+        injury_service, 'get_db_service',
         lambda: MagicMock(
             load_all_injury_statuses=AsyncMock(return_value=[
                 {'team': 'LAL', 'player': 'Anthony Davis', 'status': 'Out'},

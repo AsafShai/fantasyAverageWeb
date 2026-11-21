@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -26,6 +27,51 @@ sse_subscribers: list[asyncio.Queue] = []
 notification_history: list[InjuryNotification] = []
 MAX_NOTIFICATION_HISTORY = 150
 last_report_time: str | None = None
+
+# Report changes waiting to be written to player_injury_status, keyed
+# "team|player"; the newest change per player wins. While the process runs
+# injury_store is the source of truth and the table only carries statuses and
+# last_update across restarts, so the writes go out at most once an hour (and
+# on shutdown) instead of on every 15-minute report: each write wakes the
+# scale-to-zero database for at least five minutes. A crash loses at most an
+# hour of last_update stamps; the statuses come back with the next report.
+DB_FLUSH_INTERVAL_S = 3600.0
+_pending_db_writes: dict[str, InjuryRecord | tuple[str, str]] = {}
+_last_db_flush: float | None = None
+
+# What player_injury_status holds (pending writes included), keyed
+# "team|player", for the pages that tag players by status. Not injury_store:
+# that holds only the teams the latest report covers, while the table keeps
+# every other team's last statuses. Loaded with initialize(), or on first use.
+_table_rows: dict[str, dict] | None = None
+
+
+def _queue_upsert(record: InjuryRecord) -> None:
+    key = f"{record.team}|{record.player}"
+    _pending_db_writes[key] = record
+    if _table_rows is not None:
+        _table_rows[key] = {"team": record.team, "player": record.player, "status": record.status}
+
+
+def _queue_delete(team: str, player: str) -> None:
+    key = f"{team}|{player}"
+    _pending_db_writes[key] = (team, player)
+    if _table_rows is not None:
+        _table_rows.pop(key, None)
+
+
+def _load_table_rows(rows: list[dict]) -> None:
+    """Mirror the table's rows, with the changes still queued applied on top."""
+    global _table_rows
+    _table_rows = {
+        f"{r['team']}|{r['player']}": {"team": r["team"], "player": r["player"], "status": r.get("status")}
+        for r in rows
+    }
+    for key, change in _pending_db_writes.items():
+        if isinstance(change, InjuryRecord):
+            _table_rows[key] = {"team": change.team, "player": change.player, "status": change.status}
+        else:
+            _table_rows.pop(key, None)
 
 
 def get_utc_now_str() -> str:
@@ -542,23 +588,29 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
             record = new_store.get(key)
             if record:
                 if record.status == "Available":
-                    await db_service.delete_injury_status(record.team, record.player)
+                    _queue_delete(record.team, record.player)
                 else:
-                    await db_service.upsert_injury_status(record)
+                    _queue_upsert(record)
         elif notif.type == "removed":
-            await db_service.delete_injury_status(notif.team, notif.player)
+            _queue_delete(notif.team, notif.player)
 
     teams_in_new = {r.team for r in new_records} | report.reported_teams
     teams_in_memory = {rec.team for rec in old_store.values()}
     teams_only_in_pdf = teams_in_new - teams_in_memory
 
     if teams_only_in_pdf:
+        # This read wakes the database anyway, and must not see rows that
+        # queued deletes have already dropped from memory.
+        await flush_pending_db_writes()
         db_records = await db_service.get_injury_statuses_for_teams(list(teams_only_in_pdf))
         new_keys = {f"{rec.team}|{rec.player}" for rec in new_records}
         for row in db_records:
             key = f"{row['team']}|{row['player']}"
             if key not in new_keys:
-                await db_service.delete_injury_status(row['team'], row['player'])
+                if not await db_service.delete_injury_status(row['team'], row['player']):
+                    _pending_db_writes[key] = (row['team'], row['player'])
+                if _table_rows is not None:
+                    _table_rows.pop(key, None)
                 notifications.append(InjuryNotification(
                     type="removed",
                     player=row['player'],
@@ -587,9 +639,95 @@ async def update_injury_data() -> None:
     await _try_update_injury_data()
 
 
+async def flush_pending_db_writes() -> int:
+    """Write the queued report changes to player_injury_status. A write that
+    fails is queued again unless a newer change for that player arrived in the
+    meantime. Returns the number of writes attempted."""
+    global _last_db_flush
+    _last_db_flush = time.monotonic()
+    if not _pending_db_writes:
+        return 0
+    batch = dict(_pending_db_writes)
+    _pending_db_writes.clear()
+    db_service = get_db_service()
+    failed = 0
+    for key, change in batch.items():
+        try:
+            if isinstance(change, InjuryRecord):
+                ok = await db_service.upsert_injury_status(change)
+            else:
+                ok = await db_service.delete_injury_status(*change)
+        except Exception as e:
+            ok = False
+            logger.warning(f"Injury DB write failed for {key}: {type(e).__name__}: {e}")
+        if ok is False:
+            failed += 1
+            _pending_db_writes.setdefault(key, change)
+    logger.info(f"Injury DB flush: {len(batch) - failed} write(s), {failed} failed")
+    return len(batch)
+
+
+async def flush_pending_db_writes_if_due() -> None:
+    if _last_db_flush is None or time.monotonic() - _last_db_flush >= DB_FLUSH_INTERVAL_S:
+        await flush_pending_db_writes()
+
+
+def injury_status_rows() -> list[dict] | None:
+    """player_injury_status's rows (Available players have no row), from the
+    in-memory mirror; None until it has been loaded."""
+    if _table_rows is None:
+        return None
+    return list(_table_rows.values())
+
+
+async def load_injury_status_rows() -> list[dict]:
+    """The table's rows, read from it once and from memory after that."""
+    rows = injury_status_rows()
+    if rows is not None:
+        return rows
+    rows = await get_db_service().load_all_injury_statuses()
+    if rows:  # [] is also what a failed read returns: try again next time
+        _load_table_rows(rows)
+        return injury_status_rows()
+    return rows
+
+
 # Team names the parser used to produce, mapped to what it produces now. Stored
 # rows are moved over on startup so their last_update survives the rename.
 LEGACY_TEAM_NAMES = {"Philadelphia76ers": "Philadelphia 76ers"}
+
+
+def _reconcile_table_with_report(
+    db_rows: list[dict], records: list[InjuryRecord], reported_teams: set[str]
+) -> int:
+    """Queue the writes that bring the table in line with the report for the
+    teams it covers. Later reports only queue what changes between two reports,
+    so without this a change lost with a crash before the hourly flush (or made
+    while the process was down) would stay wrong in the table, and in the tags
+    read from it, until the player's status changed again. Returns the number
+    of writes queued."""
+    covered = {r.team for r in records} | set(reported_teams or ())
+    stored = {f"{r['team']}|{r['player']}": r for r in db_rows if r.get("team") in covered}
+    queued = 0
+    listed: set[str] = set()
+    for record in records:
+        key = f"{record.team}|{record.player}"
+        listed.add(key)
+        row = stored.get(key)
+        if record.status == "Available":
+            if row is not None:
+                _queue_delete(record.team, record.player)
+                queued += 1
+        # Status only, like compute_diff: the upsert stamps last_updated on a
+        # reason-only change too, and last_updated means "status last changed".
+        elif row is None or row.get("status") != record.status:
+            _queue_upsert(record)
+            queued += 1
+    for key, row in stored.items():
+        if key not in listed:
+            _queue_delete(row["team"], row["player"])
+            queued += 1
+    return queued
 
 
 async def initialize() -> None:
@@ -611,6 +749,8 @@ async def initialize() -> None:
         return
 
     db_rows = await db_service.load_all_injury_statuses()
+    if db_rows:
+        _load_table_rows(db_rows)
     db_timestamps: dict[str, str] = {}
     for row in db_rows:
         key = f"{row['team']}|{row['player']}"
@@ -621,13 +761,18 @@ async def initialize() -> None:
             db_timestamps[key] = str(ts)
 
     now_il = get_utc_now_str()
-    records = (await asyncio.to_thread(_parse_and_trim, pdf_bytes)).records
+    report = await asyncio.to_thread(_parse_and_trim, pdf_bytes)
+    records = report.records
     for record in records:
         key = f"{record.team}|{record.player}"
         last_update = db_timestamps.get(key, now_il)
         injury_store[key] = record.model_copy(update={"last_update": last_update})
 
-    logger.info(f"Injury store initialized with {len(injury_store)} player(s)")
+    queued = _reconcile_table_with_report(db_rows, records, report.reported_teams)
+    logger.info(
+        f"Injury store initialized with {len(injury_store)} player(s)"
+        + (f"; {queued} table row(s) queued to match the report" if queued else "")
+    )
 
     global last_report_time
     now_ny = datetime.now(NY_TZ)
@@ -664,6 +809,10 @@ async def start_scheduler() -> None:
                 success = False
             if success:
                 break
+        try:
+            await flush_pending_db_writes_if_due()
+        except Exception as e:
+            logger.error(f"Injury DB flush error: {type(e).__name__}: {e}", exc_info=True)
         if not success:
             logger.warning(
                 f"Injury report {_report_name(get_current_pdf_url())} unavailable after "

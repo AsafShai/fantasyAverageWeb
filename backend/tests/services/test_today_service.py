@@ -647,15 +647,88 @@ class TestInjuryReportRefreshesCachedHub:
 
 
 @pytest.mark.asyncio
-async def test_last_nightly_reports_a_no_games_night():
+async def test_last_nightly_reports_a_no_games_night(monkeypatch):
     service = TodayService()
 
     async def run():
         return {'game_date': date(2026, 11, 19), 'num_rows': 0, 'status': 'no_games'}
 
-    service.db_service.get_latest_model_nightly_run = run
+    # DBService is a process-wide singleton: patch, don't assign.
+    monkeypatch.setattr(service.db_service, 'get_latest_model_nightly_run', run)
     nightly = await service._get_last_nightly()
     assert nightly is not None
     assert nightly.game_date == date(2026, 11, 19)
     assert nightly.rows == 0
     assert nightly.status == 'no_games'
+
+
+class TestDbReadCache:
+    """The hub's and the Rankings table's DB reads are reused across page views
+    until the tables are written again, so a visit need not wake the database."""
+
+    def _service(self, rows):
+        from unittest.mock import AsyncMock, MagicMock
+
+        service = TodayService()
+        service.db_service = MagicMock(
+            get_latest_two_periods_rankings=AsyncMock(return_value=rows),
+            get_team_snapshots_for_periods=AsyncMock(return_value=[]),
+            get_latest_model_nightly_run=AsyncMock(return_value={'game_date': date(2026, 11, 19)}),
+        )
+        return service
+
+    ROWS = [rankings_row(10, 1, 'Alpha'), rankings_row(11, 1, 'Alpha', rk_total=50.0)]
+
+    @pytest.mark.asyncio
+    async def test_rank_changes_read_once_until_a_write(self, monkeypatch):
+        writes = [0]
+        monkeypatch.setattr(today_module, '_rankings_writes', lambda: writes[0])
+        service = self._service(self.ROWS)
+
+        first = await service._stored_rank_changes('averages')
+        assert await service._stored_rank_changes('averages') is first
+        assert service.db_service.get_latest_two_periods_rankings.await_count == 1
+
+        writes[0] += 1
+        await service._stored_rank_changes('averages')
+        assert service.db_service.get_latest_two_periods_rankings.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_modes_are_cached_separately(self):
+        service = self._service(self.ROWS)
+        await service._stored_rank_changes('averages')
+        await service._stored_rank_changes('totals')
+        await service._stored_rank_changes('totals')
+        assert service.db_service.get_latest_two_periods_rankings.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_empty_result_is_not_kept(self):
+        """The DB helpers return [] on failure; that must not stick."""
+        service = self._service([])
+        await service._stored_rank_changes('averages')
+        await service._stored_rank_changes('averages')
+        assert service.db_service.get_latest_two_periods_rankings.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_expires_after_an_hour(self, monkeypatch):
+        clock = [1000.0]
+        monkeypatch.setattr(today_module.time, 'monotonic', lambda: clock[0])
+        service = self._service(self.ROWS)
+        await service._latest_nightly_run()
+        clock[0] += today_module._DB_READ_TTL_S - 1
+        await service._latest_nightly_run()
+        assert service.db_service.get_latest_model_nightly_run.await_count == 1
+        clock[0] += 1
+        await service._latest_nightly_run()
+        assert service.db_service.get_latest_model_nightly_run.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_nightly_clear_drops_the_reads(self):
+        service = self._service(self.ROWS)
+        await service._latest_nightly_run()
+        await service._get_movers()
+        today_module.clear_today_hub_cache()
+        await service._latest_nightly_run()
+        await service._get_movers()
+        assert service.db_service.get_latest_model_nightly_run.await_count == 2
+        assert service.db_service.get_latest_two_periods_rankings.await_count == 2

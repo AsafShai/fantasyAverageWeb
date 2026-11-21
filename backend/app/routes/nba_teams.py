@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, HTTPException
 
 from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart
-from app.services.db_service import get_db_service
+from app.services import injury_service
 from app.services.depth_chart_service import DepthChartFetchError, DepthChartService
 from app.utils.constants import PRO_TEAM_MAP, NBA_TEAM_NAMES
 from app.utils.name_matching import normalize_player_name
@@ -31,8 +31,7 @@ async def get_depth_chart(team_id: int):
     team_data = data.get("team", {})
     depthcharts = data.get("depthchart", [])
 
-    db_service = get_db_service()
-    all_statuses = await db_service.load_all_injury_statuses()
+    all_statuses = await injury_service.load_injury_status_rows()
     injury_lookup = {normalize_player_name(row['player']): row['status'] for row in all_statuses}
 
     positions: list[DepthChartPosition] = []
