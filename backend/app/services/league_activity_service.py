@@ -29,6 +29,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 import httpx
+import pydantic_core
 
 from app.config import settings
 from app.exceptions import DataSourceError
@@ -738,7 +739,10 @@ class LeagueActivityService:
         if etag_key is not None and response.status_code == 304:
             return None
         response.raise_for_status()
-        data = response.json()
+        # Off the event loop: a refresh parses ~a dozen of these, ~0.1 s of CPU
+        # together, which on a fraction of a CPU froze every other request.
+        # pydantic_core builds the same dict as response.json() in less CPU.
+        data = await asyncio.to_thread(pydantic_core.from_json, response.content)
         if etag_key is not None:
             if response.headers.get('etag'):
                 _cache.etags[etag_key] = response.headers['etag']
@@ -835,7 +839,7 @@ class LeagueActivityService:
                 del _cache.etags[key]
         if missing:
             cards, changed = await self._stat_cards(missing)
-            _cache.stats.update(parse_game_logs(cards, self.season_id))
+            _cache.stats.update(await asyncio.to_thread(parse_game_logs, cards, self.season_id))
             # A player ESPN returns nothing for isn't asked for again until the next stats refresh.
             for i in missing:
                 if i not in _cache.stats:
@@ -908,32 +912,10 @@ class LeagueActivityService:
                     _cache.result_checked = checked
                 return _cache.result
 
-            league = _cache.league or {}
-            status = league.get('status', {})
-            first = status.get('firstScoringPeriod', 1) or 1
-            latest = status.get('latestScoringPeriod') or league.get('scoringPeriodId') or first
-            final = status.get('finalScoringPeriod') or latest
-            roster_lock = ((league.get('settings') or {}).get('rosterSettings') or {}).get('rosterLocktimeType')
-            transactions, names = merge_card_transactions(_cache.cards or [])
-            ids = dict.fromkeys([c['id'] for c in _cache.cards or []] + _cache.pool_ids)
-            logs = {i: _cache.stats[i] for i in ids if i in _cache.stats}
-            transformer = DataTransformer()
-            result = build_league_activity(
-                season_id=self.season_id,
-                transactions=transactions,
-                game_logs=logs,
-                schedule=parse_schedule(_cache.schedule or {}, first, min(latest, final)),
-                season_start=settings.season_start,
-                teams=parse_teams(league),
-                categories=transformer.resolve_ranking_categories(league),
-                latest_period=min(latest, final),
-                names=names,
-                season_over=latest > final,
-                lock_per_game=roster_lock == 'INDIVIDUAL_GAME',
-                pool_logs={i: logs[i] for i in _cache.pool_ids if i in logs},
-                reverse_categories=transformer.resolve_reverse_categories(league),
-                pending_trades=parse_pending_trades(league, {**_cache.names, **names}),
-            )
+            # The build is pure CPU over what the refresh stored (held still by
+            # _cache.lock), so it runs in a worker thread and other requests
+            # keep being served meanwhile.
+            result = await asyncio.to_thread(self._build_result)
             _cache.result, _cache.result_key, _cache.result_checked = result, result_key, checked
             logger.info(
                 f"League activity built: {len(result.moves)} moves, {len(result.trades)} trades, "
@@ -942,6 +924,36 @@ class LeagueActivityService:
             )
             return result
 
+    def _build_result(self) -> LeagueActivity:
+        """The feed from the cached league, cards, stats and schedule. Called
+        with _cache.lock held."""
+        league = _cache.league or {}
+        status = league.get('status', {})
+        first = status.get('firstScoringPeriod', 1) or 1
+        latest = status.get('latestScoringPeriod') or league.get('scoringPeriodId') or first
+        final = status.get('finalScoringPeriod') or latest
+        roster_lock = ((league.get('settings') or {}).get('rosterSettings') or {}).get('rosterLocktimeType')
+        transactions, names = merge_card_transactions(_cache.cards or [])
+        ids = dict.fromkeys([c['id'] for c in _cache.cards or []] + _cache.pool_ids)
+        logs = {i: _cache.stats[i] for i in ids if i in _cache.stats}
+        transformer = DataTransformer()
+        result = build_league_activity(
+            season_id=self.season_id,
+            transactions=transactions,
+            game_logs=logs,
+            schedule=parse_schedule(_cache.schedule or {}, first, min(latest, final)),
+            season_start=settings.season_start,
+            teams=parse_teams(league),
+            categories=transformer.resolve_ranking_categories(league),
+            latest_period=min(latest, final),
+            names=names,
+            season_over=latest > final,
+            lock_per_game=roster_lock == 'INDIVIDUAL_GAME',
+            pool_logs={i: logs[i] for i in _cache.pool_ids if i in logs},
+            reverse_categories=transformer.resolve_reverse_categories(league),
+            pending_trades=parse_pending_trades(league, {**_cache.names, **names}),
+        )
+        return result
 
     async def _ensure_schedule(self, now: float) -> None:
         if _cache.schedule is not None and now - _cache.schedule_at < SCHEDULE_TTL_SECONDS:
