@@ -356,6 +356,18 @@ class TestBatchedDbWrites:
         db.delete_injury_status.assert_awaited_once_with("LAL", "A")
 
     @pytest.mark.asyncio
+    async def test_write_reported_failed_is_requeued(self, monkeypatch):
+        """DBService's write methods log and return False rather than raise."""
+        from unittest.mock import AsyncMock
+
+        db = self._db()
+        db.delete_injury_status = AsyncMock(return_value=False)
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        inj._pending_db_writes["LAL|A"] = ("LAL", "A")
+        await inj.flush_pending_db_writes()
+        assert inj._pending_db_writes == {"LAL|A": ("LAL", "A")}
+
+    @pytest.mark.asyncio
     async def test_failed_write_is_requeued(self, monkeypatch):
         from unittest.mock import AsyncMock
 
@@ -396,19 +408,57 @@ class TestBatchedDbWrites:
 
 
 class TestInjuryStatusRows:
-    def test_rows_come_from_memory_without_available(self, monkeypatch):
-        monkeypatch.setattr(inj, "injury_store", {
-            "LAL|A": _rec(player="A", status="Out"),
-            "LAL|B": _rec(player="B", status="Available"),
-        })
-        assert inj.injury_status_rows() == [{"team": "LAL", "player": "A", "status": "Out"}]
+    """The status-tagging pages read a mirror of player_injury_status, which
+    keeps teams the latest report does not cover (injury_store does not)."""
 
     @pytest.mark.asyncio
-    async def test_falls_back_to_table_before_first_report(self, monkeypatch):
+    async def test_table_is_read_once_then_served_from_memory(self, monkeypatch):
         from unittest.mock import AsyncMock, MagicMock
 
-        monkeypatch.setattr(inj, "injury_store", {})
-        rows = [{"team": "LAL", "player": "A", "status": "Out"}]
-        monkeypatch.setattr(inj, "get_db_service",
-                            lambda: MagicMock(load_all_injury_statuses=AsyncMock(return_value=rows)))
-        assert await inj.load_injury_status_rows() == rows
+        rows = [{"team": "LAL", "player": "A", "status": "Out", "injury_reason": "Knee", "last_updated": None}]
+        db = MagicMock(load_all_injury_statuses=AsyncMock(return_value=rows))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        expected = [{"team": "LAL", "player": "A", "status": "Out"}]
+        assert await inj.load_injury_status_rows() == expected
+        assert await inj.load_injury_status_rows() == expected
+        db.load_all_injury_statuses.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_failed_read_is_not_kept(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        db = MagicMock(load_all_injury_statuses=AsyncMock(return_value=[]))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        await inj.load_injury_status_rows()
+        await inj.load_injury_status_rows()
+        assert db.load_all_injury_statuses.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_teams_outside_the_report_keep_their_statuses(self, monkeypatch):
+        """BOS is not in today's report: its season-long Out stays tagged, while
+        LAL's report changes show at once (before the hourly DB flush)."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        inj._load_table_rows([
+            {"team": "BOS", "player": "Long Term", "status": "Out"},
+            {"team": "LAL", "player": "Gone", "status": "Out"},
+        ])
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport([_rec(player="New")]))
+        monkeypatch.setattr(inj, "injury_store", {"LAL|Gone": _rec(player="Gone")})
+        db = MagicMock(upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
+                       get_injury_statuses_for_teams=AsyncMock(return_value=[]))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        monkeypatch.setattr(inj, "broadcast_notifications", AsyncMock())
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", MagicMock())
+        assert await inj._try_update_injury_data() is True
+
+        assert sorted(r["player"] for r in inj.injury_status_rows()) == ["Long Term", "New"]
+        db.upsert_injury_status.assert_not_awaited()
+
+    def test_queued_changes_apply_over_a_late_table_load(self):
+        inj._pending_db_writes["LAL|A"] = ("LAL", "A")
+        inj._pending_db_writes["LAL|B"] = _rec(player="B", status="Doubtful")
+        inj._load_table_rows([{"team": "LAL", "player": "A", "status": "Out"}])
+        assert inj.injury_status_rows() == [{"team": "LAL", "player": "B", "status": "Doubtful"}]

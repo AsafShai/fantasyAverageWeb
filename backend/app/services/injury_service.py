@@ -39,6 +39,40 @@ DB_FLUSH_INTERVAL_S = 3600.0
 _pending_db_writes: dict[str, InjuryRecord | tuple[str, str]] = {}
 _last_db_flush: float | None = None
 
+# What player_injury_status holds (pending writes included), keyed
+# "team|player", for the pages that tag players by status. Not injury_store:
+# that holds only the teams the latest report covers, while the table keeps
+# every other team's last statuses. Loaded with initialize(), or on first use.
+_table_rows: dict[str, dict] | None = None
+
+
+def _queue_upsert(record: InjuryRecord) -> None:
+    key = f"{record.team}|{record.player}"
+    _pending_db_writes[key] = record
+    if _table_rows is not None:
+        _table_rows[key] = {"team": record.team, "player": record.player, "status": record.status}
+
+
+def _queue_delete(team: str, player: str) -> None:
+    key = f"{team}|{player}"
+    _pending_db_writes[key] = (team, player)
+    if _table_rows is not None:
+        _table_rows.pop(key, None)
+
+
+def _load_table_rows(rows: list[dict]) -> None:
+    """Mirror the table's rows, with the changes still queued applied on top."""
+    global _table_rows
+    _table_rows = {
+        f"{r['team']}|{r['player']}": {"team": r["team"], "player": r["player"], "status": r.get("status")}
+        for r in rows
+    }
+    for key, change in _pending_db_writes.items():
+        if isinstance(change, InjuryRecord):
+            _table_rows[key] = {"team": change.team, "player": change.player, "status": change.status}
+        else:
+            _table_rows.pop(key, None)
+
 
 def get_utc_now_str() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -554,11 +588,11 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
             record = new_store.get(key)
             if record:
                 if record.status == "Available":
-                    _pending_db_writes[key] = (record.team, record.player)
+                    _queue_delete(record.team, record.player)
                 else:
-                    _pending_db_writes[key] = record
+                    _queue_upsert(record)
         elif notif.type == "removed":
-            _pending_db_writes[key] = (notif.team, notif.player)
+            _queue_delete(notif.team, notif.player)
 
     teams_in_new = {r.team for r in new_records} | report.reported_teams
     teams_in_memory = {rec.team for rec in old_store.values()}
@@ -573,7 +607,10 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
         for row in db_records:
             key = f"{row['team']}|{row['player']}"
             if key not in new_keys:
-                await db_service.delete_injury_status(row['team'], row['player'])
+                if not await db_service.delete_injury_status(row['team'], row['player']):
+                    _pending_db_writes[key] = (row['team'], row['player'])
+                if _table_rows is not None:
+                    _table_rows.pop(key, None)
                 notifications.append(InjuryNotification(
                     type="removed",
                     player=row['player'],
@@ -617,13 +654,15 @@ async def flush_pending_db_writes() -> int:
     for key, change in batch.items():
         try:
             if isinstance(change, InjuryRecord):
-                await db_service.upsert_injury_status(change)
+                ok = await db_service.upsert_injury_status(change)
             else:
-                await db_service.delete_injury_status(*change)
+                ok = await db_service.delete_injury_status(*change)
         except Exception as e:
+            ok = False
+            logger.warning(f"Injury DB write failed for {key}: {type(e).__name__}: {e}")
+        if ok is False:
             failed += 1
             _pending_db_writes.setdefault(key, change)
-            logger.warning(f"Injury DB write failed for {key}: {type(e).__name__}: {e}")
     logger.info(f"Injury DB flush: {len(batch) - failed} write(s), {failed} failed")
     return len(batch)
 
@@ -634,24 +673,23 @@ async def flush_pending_db_writes_if_due() -> None:
 
 
 def injury_status_rows() -> list[dict] | None:
-    """The current statuses as player_injury_status rows (Available players
-    have no row), straight from memory; None until a report has been loaded, so
-    a caller can fall back to the table."""
-    if not injury_store:
+    """player_injury_status's rows (Available players have no row), from the
+    in-memory mirror; None until it has been loaded."""
+    if _table_rows is None:
         return None
-    return [
-        {"team": rec.team, "player": rec.player, "status": rec.status}
-        for rec in injury_store.values()
-        if rec.status != "Available"
-    ]
+    return list(_table_rows.values())
 
 
 async def load_injury_status_rows() -> list[dict]:
-    """injury_status_rows(), or the table when no report is in memory yet."""
+    """The table's rows, read from it once and from memory after that."""
     rows = injury_status_rows()
     if rows is not None:
         return rows
-    return await get_db_service().load_all_injury_statuses()
+    rows = await get_db_service().load_all_injury_statuses()
+    if rows:  # [] is also what a failed read returns: try again next time
+        _load_table_rows(rows)
+        return injury_status_rows()
+    return rows
 
 
 # Team names the parser used to produce, mapped to what it produces now. Stored
@@ -678,6 +716,8 @@ async def initialize() -> None:
         return
 
     db_rows = await db_service.load_all_injury_statuses()
+    if db_rows:
+        _load_table_rows(db_rows)
     db_timestamps: dict[str, str] = {}
     for row in db_rows:
         key = f"{row['team']}|{row['player']}"

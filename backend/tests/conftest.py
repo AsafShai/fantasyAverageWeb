@@ -258,9 +258,11 @@ def reset_injury_db_queue():
     from app.services import injury_service
     injury_service._pending_db_writes.clear()
     injury_service._last_db_flush = None
+    injury_service._table_rows = None
     yield
     injury_service._pending_db_writes.clear()
     injury_service._last_db_flush = None
+    injury_service._table_rows = None
 
 @pytest.fixture(autouse=True)
 def reset_surprise_read_cache():
