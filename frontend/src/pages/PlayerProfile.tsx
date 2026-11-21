@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import WaiverClearTag from '../components/WaiverClearTag'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useUrlState } from '../hooks/useUrlState'
 import { PLAYER_PROFILE_URL_SCHEMA, PLAYER_TAB_OPTIONS } from './playerProfileTabs'
@@ -142,6 +143,7 @@ const PlayerProfileDesktop = () => {
                   {fantasyEntry.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}
                 </span>
               )}
+              {fantasyEntry.status === 'WAIVERS' && <WaiverClearTag clearsAt={fantasyEntry.waiver_clears_at} large />}
               <button
                 type="button"
                 onClick={() => {

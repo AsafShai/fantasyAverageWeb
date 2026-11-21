@@ -367,6 +367,7 @@ class ResponseBuilder:
                 last7_rating=float(row['last7_rating']) if row.get('last7_rating') is not None else None,
                 last15_rating=float(row['last15_rating']) if row.get('last15_rating') is not None else None,
                 last30_rating=float(row['last30_rating']) if row.get('last30_rating') is not None else None,
+                waiver_clears_at=row.get('waiver_clears_at') or None,
                 has_data=bool(row.get('has_data', True)),
             ))
         return players

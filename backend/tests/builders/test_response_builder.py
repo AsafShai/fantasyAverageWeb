@@ -351,3 +351,12 @@ class TestPlayerStatsGenericField:
         result = response_builder.build_all_players_response(response_builder_players_df)
         first = result[0]
         assert first.stats.stats['PTS'] == first.stats.pts
+
+    def test_build_all_players_response_carries_waiver_clears_at(
+        self, response_builder, response_builder_players_df
+    ):
+        df = response_builder_players_df.with_columns(
+            pl.Series('waiver_clears_at', ['2026-11-22T08:00:00Z', None])
+        )
+        result = response_builder.build_all_players_response(df)
+        assert [p.waiver_clears_at for p in result] == ['2026-11-22T08:00:00Z', None]

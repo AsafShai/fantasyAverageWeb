@@ -317,6 +317,20 @@ class TestRawAllPlayersToDf:
         assert row["GP"] == 0
         assert row["PTS"] == 0
 
+    def test_waiver_process_date_becomes_waiver_clears_at(self, transformer):
+        """ESPN's waiverProcessDate (epoch ms) is when a waived player clears."""
+        waived = _player_entry(104, "Waived W", stats={"0": 10.0, "42": 5})
+        waived.update(status="WAIVERS", onTeamId=0, waiverProcessDate=1795334400000)
+        rostered = _player_entry(105, "Rostered R", stats={"0": 10.0, "42": 5})
+        rostered["waiverProcessDate"] = 1795334400000  # ignored off waivers
+        free_agent = _player_entry(106, "Free F", stats={"0": 10.0, "42": 5})
+        free_agent.update(status="FREEAGENT", onTeamId=0)
+
+        df = transformer.raw_all_players_to_df({"players": [waived, rostered, free_agent]})
+        clears = dict(zip(df["Name"].to_list(), df["waiver_clears_at"].to_list()))
+
+        assert clears == {"Waived W": "2026-11-22T08:00:00Z", "Rostered R": None, "Free F": None}
+
 
 class TestResolveRankingCategories:
     def test_no_settings_falls_back_to_default(self, transformer):

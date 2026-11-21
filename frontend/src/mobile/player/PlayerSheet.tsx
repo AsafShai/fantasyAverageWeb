@@ -1,3 +1,4 @@
+import { waiverClear } from '../../utils/waiverClear'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useMyTeam } from '../../context/MyTeamContext'
@@ -214,5 +215,12 @@ function OwnerBadge({ player, onGo }: { player: Player; onGo: (path: string) => 
       </Link>
     )
   }
+  const clear = player.status === 'WAIVERS' ? waiverClear(player.waiver_clears_at) : null
+  if (clear)
+    return (
+      <span className={`mr-ps-badge ${clear.soon ? 'mr-ps-waiver-soon' : 'mr-ps-free'}`} title={clear.full}>
+        Waivers · clears {clear.when}
+      </span>
+    )
   return <span className="mr-ps-badge mr-ps-free">{player.status === 'WAIVERS' ? 'Waivers' : 'Free Agent'}</span>
 }
