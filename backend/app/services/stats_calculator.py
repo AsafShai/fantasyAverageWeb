@@ -144,6 +144,10 @@ class StatsCalculator:
                 if max_val - min_val > 0:
                     normalized_col = []
                     for val in col_data:
+                        if val != val:
+                            # Missing value: neutral cell (NaN is not valid JSON).
+                            normalized_col.append(0.5)
+                            continue
                         if val < mean_val:
                             if mean_val - min_val > 0:
                                 norm_val = 0.5 * (val - min_val) / (mean_val - min_val)

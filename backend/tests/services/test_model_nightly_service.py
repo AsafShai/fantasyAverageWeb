@@ -1305,6 +1305,34 @@ async def test_sweep_writes_nothing_when_history_or_vectors_are_unreadable(sweep
 
 
 @pytest.mark.asyncio
+async def test_sweep_writes_rows_when_there_are_no_vectors_yet(sweep, monkeypatch):
+    """No vectors at all (first deploy, a rebuild pending): the rows are
+    written and the next nightly's full rebuild makes the vectors."""
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+    service._db.vectors_as_of, service._db.vector_rows = None, ([], [], [])
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert "vectors: left_to_rebuild" in result
+    (_, _, _, vectors, _), = service._db.committed
+    assert vectors is None
+
+
+@pytest.mark.asyncio
+async def test_a_cache_failure_after_the_commit_still_counts_the_night(sweep, monkeypatch):
+    service, calls = sweep
+    service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])
+
+    def boom(self):
+        raise RuntimeError("cache")
+    monkeypatch.setattr(ModelNightlyService, "_invalidate_inference_store", boom)
+    _allow_fetch(monkeypatch, _espn([_fs_player(1, reb=5)], [_fs_team(10)]))
+    result = await service.sweep_corrections(GAME_DATE)
+    assert "failed" not in result and "vectors: refreshed" in result
+    assert calls["rescore"] == [(GAME_DATE, True)] and calls["cleared"] == [1]
+
+
+@pytest.mark.asyncio
 async def test_sweep_reads_a_null_stat_as_zero(sweep, monkeypatch):
     service, _ = sweep
     service._db = SweepDB([_fs_player(1, reb=6)], [_fs_team(10)])

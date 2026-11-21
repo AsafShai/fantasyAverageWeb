@@ -105,6 +105,9 @@ class TestStatsCalculator:
         df = df.with_columns(pl.when(pl.int_range(pl.len()) == 0).then(None).otherwise(pl.col(col)).alias(col))
         result = stats_calculator.normalize_for_heatmap(df)
         assert len(result) == len(df)
+        cells = [v for row in result for v in row]
+        assert all(v == v for v in cells), "NaN is not valid JSON"
+        assert 0.5 in result[0]
 
     def test_normalize_for_heatmap_success(self, stats_calculator, sample_stats_calculator_averages_df):
         """Test successful heatmap normalization using diverging scale"""
