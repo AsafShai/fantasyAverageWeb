@@ -149,6 +149,46 @@ def test_parse_roster_rejects_another_seasons_payload():
 
 
 @pytest.mark.asyncio
+async def test_fantasy_roster_for_asks_mmatchup_on_one_shared_client(monkeypatch):
+    """mMatchup carries the same roster entries as mRoster at ~1/8 the size, and
+    every night reuses one client (a new one per night rebuilt the TLS context)."""
+    calls = []
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return _roster_payload(settings.season_id)
+
+    class _Client:
+        async def get(self, url, params):
+            calls.append(params)
+            return _Resp()
+
+    made = []
+
+    def _factory(**kwargs):
+        made.append(kwargs)
+        return _Client()
+
+    async def _start():
+        return date(2026, 10, 22)
+
+    monkeypatch.setattr(surprise_service, "_roster_client", None)
+    monkeypatch.setattr(surprise_service.httpx, "AsyncClient", _factory)
+    monkeypatch.setattr(surprise_service.schedule_service, "get_season_start_date", _start)
+
+    first = await surprise_service.fantasy_roster_for(date(2026, 11, 20))
+    await surprise_service.fantasy_roster_for(date(2026, 11, 19))
+
+    assert first == {2: {"team_id": 7, "slot": "BE"}}
+    assert len(made) == 1
+    assert calls[0] == [("view", "mMatchup"), ("scoringPeriodId", "30")]
+    assert calls[1] == [("view", "mMatchup"), ("scoringPeriodId", "29")]
+
+
+@pytest.mark.asyncio
 async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     created = datetime(2025, 12, 2, 7, 0, tzinfo=timezone.utc)
 

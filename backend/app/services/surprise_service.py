@@ -38,6 +38,7 @@ from app.services.db_service import DBService
 from app.utils.constants import LINEUP_SLOT_MAP
 from app.utils.frames import dicts_frame
 from app.utils.memory import log_memory, release_memory
+from app.utils.ssl_context import shared_ssl_context
 from model_stats_inference.espn.teams import TEAM_ID_TO_ABBR
 from model_stats_inference.serving import surprise
 
@@ -84,12 +85,30 @@ def _cache_put(key: str, value, generation: int) -> None:
     _read_cache["values"][key] = value
 
 
+_roster_client: httpx.AsyncClient | None = None
+
+
+def _roster_http() -> httpx.AsyncClient:
+    """One client for every roster read: a game log asks for a night per game,
+    and a new client per request rebuilt the TLS context (CPU-heavy) and paid a
+    fresh handshake each time."""
+    global _roster_client
+    if _roster_client is None:
+        _roster_client = httpx.AsyncClient(timeout=20.0, verify=shared_ssl_context())
+    return _roster_client
+
+
 async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
     """{espn_player_id: {team_id, slot}} for the league's rosters on that night,
     from one ESPN request for that scoring period (period 1 = the season's first
-    day). Only the few fields the row needs are kept; the ~1 MB payload is
-    dropped. {} when the night is before the season or ESPN is unavailable: the
-    rows then just carry no fantasy context."""
+    day). Only the few fields the row needs are kept. {} when the night is
+    before the season or ESPN is unavailable: the rows then just carry no
+    fantasy context.
+
+    view=mMatchup, not mRoster: both carry teams[].roster.entries for the
+    period with the same player ids and lineup slots, but mRoster attaches each
+    player's full card (season stats, outlook, ranks): ~2 MB per night against
+    ~250 kB."""
     season_start = await schedule_service.get_season_start_date() or settings.season_start
     period = (game_date - season_start).days + 1
     if period < 1:
@@ -99,10 +118,9 @@ async def fantasy_roster_for(game_date: date) -> dict[int, dict]:
         f"/segments/0/leagues/{settings.league_id}"
     )
     try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.get(url, params=[("view", "mRoster"), ("view", "mTeam"), ("scoringPeriodId", str(period))])
-            resp.raise_for_status()
-            payload = resp.json()
+        resp = await _roster_http().get(url, params=[("view", "mMatchup"), ("scoringPeriodId", str(period))])
+        resp.raise_for_status()
+        payload = resp.json()
     except Exception as e:
         logger.warning(f"Fantasy rosters for {game_date} (period {period}) unavailable: {type(e).__name__}: {e}")
         return {}

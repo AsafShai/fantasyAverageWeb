@@ -155,6 +155,12 @@ def _games_from_pro_team_schedules(payload: dict[str, Any]) -> dict[int, list[Sc
     return games_by_team
 
 
+def games_by_team_from_pro_team_schedules(payload: dict[str, Any]) -> dict[int, list[ScheduledGame]]:
+    """Every team's regular-season games (sorted by date) from a
+    `proTeamSchedules_wl` payload, keyed by ESPN pro team id."""
+    return _games_from_pro_team_schedules(payload)
+
+
 def season_start_from_pro_team_schedules(payload: dict[str, Any]) -> date | None:
     """First regular-season game date, i.e. the earliest scoring period 1 game."""
     opening_dates = [
