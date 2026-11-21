@@ -4,7 +4,8 @@ should be over, not at a fixed morning hour.
 A night is the US Eastern date ESPN files its games under. For each night:
 
   * first attempt at the night's last tip-off + FIRST_CHECK_AFTER_LAST_TIP
-    (a game runs ~2h15; the rest lets ESPN's box scores settle);
+    (a game runs ~2h15: the first check lands near the final buzzer, and
+    the 15-minute retries pick up a game that runs longer);
   * while the night is not in the ledger yet (a game ran long, ESPN is late, a
     run failed), another attempt every RETRY_EVERY;
   * a final attempt at DEADLINE (04:00 ET the next morning, ~11:00 Israel) that
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 EASTERN = ZoneInfo("America/New_York")
 
-FIRST_CHECK_AFTER_LAST_TIP = timedelta(hours=2, minutes=45)
+FIRST_CHECK_AFTER_LAST_TIP = timedelta(hours=2, minutes=15)
 RETRY_EVERY = timedelta(minutes=15)
 DEADLINE = time(4, 0)                 # ET, the morning after the night
 NO_GAMES_CHECK = time(0, 15)          # ET, the morning after the night

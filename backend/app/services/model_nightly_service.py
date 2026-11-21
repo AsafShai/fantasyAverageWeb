@@ -491,18 +491,27 @@ class ModelNightlyService:
 
         summary = (f"{night}: {len(c.changed_players)} changed, {len(c.new_players)} new player line(s), "
                    f"{len(c.changed_teams)} team row(s)")
-        # This night is stored, so the store and its vectors are not empty: an
-        # empty read here is a DB error. Writing the rows without their vectors
-        # would leave the vectors stale for good (the next sweep sees no
-        # difference), so write nothing and retry next morning.
-        if vectors_as_of is None or latest is None or team_games.is_empty() or not tav or not tov:
+        # The readers return empty on a DB error. Writing the rows while the
+        # vectors that should follow them were unreadable would leave those
+        # vectors stale for good (the next sweep sees no difference), so in
+        # that case write nothing and retry next morning. Rows are written
+        # without vectors only when the next nightly rebuilds them in full
+        # anyway: the vectors are behind the store, or there are none at all.
+        no_vectors = vectors_as_of is None and not (pv or tav or tov)
+        current = vectors_as_of is not None and vectors_as_of == latest
+        unreadable = (
+            latest is None                                    # this night is stored: never empty
+            or (vectors_as_of is None and not no_vectors)     # vectors read, their date didn't
+            or (current and (team_games.is_empty() or not tav or not tov))
+        )
+        if unreadable:
             logger.warning(f"Correction sweep {night}: history or vectors unreadable; nothing written")
             return f"{summary}; history or vectors unreadable, nothing written: retried next morning", False
 
         vectors, dropped, vec_note = None, [], "left_to_rebuild"
-        if vectors_as_of != latest:
-            # The next nightly sees the same mismatch and rebuilds in full,
-            # from the corrected rows.
+        if not current:
+            # The next nightly sees the same mismatch (or no vectors) and
+            # rebuilds in full, from the corrected rows.
             logger.warning(
                 f"Correction sweep: vectors are through {vectors_as_of}, the store through {latest}; "
                 f"left to the next full rebuild"
@@ -524,9 +533,19 @@ class ModelNightlyService:
         ):
             return f"{summary}; write failed, nothing written: retried next morning", False
         # Committed: what depends on it first, so nothing below can skip it.
-        if vectors is not None:
-            self._invalidate_inference_store()
-        _clear_night_read_caches()
+        # A failure here must not report the night as failed: it is committed,
+        # the next sweep finds no difference, so "retried" would be untrue.
+        try:
+            if vectors is not None:
+                self._invalidate_inference_store()
+        except Exception as e:
+            logger.error(f"Correction sweep {night}: committed, but invalidating the inference store failed: {e}",
+                         exc_info=True)
+        try:
+            _clear_night_read_caches()
+        except Exception as e:
+            logger.error(f"Correction sweep {night}: committed, but clearing the read caches failed: {e}",
+                         exc_info=True)
         try:
             logger.info(f"Correction sweep {summary}; vectors {vec_note}"
                         + (f", {len(dropped)} dropped" if dropped else ""))

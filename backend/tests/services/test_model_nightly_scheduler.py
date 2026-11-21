@@ -40,13 +40,13 @@ class TestPlanNight:
     def test_first_check_is_the_last_tip_plus_the_buffer(self):
         tip = et(NIGHT, 22, 30)
         plan = sched.plan_night(NIGHT, tip, True)
-        assert plan.first_check == et(NEXT, 1, 15)
+        assert plan.first_check == et(NEXT, 0, 45)
         assert plan.deadline == et(NEXT, 4, 0)
         assert plan.source == "tip"
 
     def test_an_afternoon_only_slate_is_checked_the_same_afternoon(self):
         plan = sched.plan_night(NIGHT, et(NIGHT, 14, 0), True)
-        assert plan.first_check == et(NIGHT, 16, 45)
+        assert plan.first_check == et(NIGHT, 16, 15)
 
     def test_a_night_without_games_is_sealed_after_midnight(self):
         plan = sched.plan_night(NIGHT, None, True)
@@ -74,10 +74,10 @@ class TestPlanNight:
 
 
 class TestNextAttempt:
-    plan = sched.plan_night(NIGHT, et(NIGHT, 22, 30), True)      # first 01:15, deadline 04:00
+    plan = sched.plan_night(NIGHT, et(NIGHT, 22, 30), True)      # first 00:45, deadline 04:00
 
     def test_first_attempt_is_the_first_check(self):
-        assert sched.next_attempt(self.plan, False, None) == et(NEXT, 1, 15)
+        assert sched.next_attempt(self.plan, False, None) == et(NEXT, 0, 45)
 
     def test_retries_every_fifteen_minutes(self):
         assert sched.next_attempt(self.plan, False, et(NEXT, 1, 15, 40)) == et(NEXT, 1, 30, 40)
@@ -86,7 +86,7 @@ class TestNextAttempt:
         assert sched.next_attempt(self.plan, False, et(NEXT, 3, 50)) == et(NEXT, 4, 0)
 
     def test_a_retry_never_comes_before_a_first_check_that_moved_later(self):
-        assert sched.next_attempt(self.plan, False, et(NEXT, 0, 0)) == et(NEXT, 1, 15)
+        assert sched.next_attempt(self.plan, False, et(NEXT, 0, 0)) == et(NEXT, 0, 45)
 
     def test_once_done_only_the_deadline_is_left(self):
         assert sched.next_attempt(self.plan, True, et(NEXT, 1, 15)) == et(NEXT, 4, 0)
@@ -155,13 +155,13 @@ START = et(NIGHT, 12, 0)
 
 
 def test_normal_night_one_attempt_then_the_deadline(monkeypatch):
-    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 15)), tip_at(22, 30))
-    assert calls == [(et(NEXT, 1, 15), NIGHT, False), (et(NEXT, 4, 0), NIGHT, True)]
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 0, 45)), tip_at(22, 30))
+    assert calls == [(et(NEXT, 0, 45), NIGHT, False), (et(NEXT, 4, 0), NIGHT, True)]
 
 
 def test_overtime_retries_every_fifteen_minutes_until_done(monkeypatch):
-    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 40)), tip_at(22, 30))
-    assert [c[0] for c in calls] == [et(NEXT, 1, 15), et(NEXT, 1, 30), et(NEXT, 1, 45), et(NEXT, 4, 0)]
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 10)), tip_at(22, 30))
+    assert [c[0] for c in calls] == [et(NEXT, 0, 45), et(NEXT, 1, 0), et(NEXT, 1, 15), et(NEXT, 4, 0)]
     assert [c[2] for c in calls] == [False, False, False, True]
 
 
@@ -169,9 +169,9 @@ def test_a_night_that_never_completes_retries_to_the_deadline_then_moves_on(monk
     never = lambda now, night, final: "incomplete_data"
     calls = run_loop(monkeypatch, START, et(NEXT, 23, 0), never, tip_at(22, 30))
     times = [c[0] for c in calls if c[1] == NIGHT]
-    assert times[0] == et(NEXT, 1, 15) and times[-1] == et(NEXT, 4, 0)
+    assert times[0] == et(NEXT, 0, 45) and times[-1] == et(NEXT, 4, 0)
     assert all(b - a == timedelta(minutes=15) for a, b in zip(times[:-2], times[1:-1]))
-    assert len(times) == 12                                  # 01:15 .. 03:45 every 15 min (11) + 04:00
+    assert len(times) == 14                                  # 00:45 .. 03:45 every 15 min (13) + 04:00
     assert calls[-1][1] == NIGHT and calls[-1][2] is True
     # The next night is planned from its own tip-off, not retried in a loop.
     assert not [c for c in calls if c[1] == NEXT]
@@ -181,8 +181,8 @@ def test_the_next_night_follows(monkeypatch):
     calls = run_loop(monkeypatch, START, et(NEXT + timedelta(days=1), 12),
                      lambda now, night, final: "processed", tip_at(22, 0))
     assert calls == [
-        (et(NEXT, 0, 45), NIGHT, False), (et(NEXT, 4, 0), NIGHT, True),
-        (et(NEXT + timedelta(days=1), 0, 45), NEXT, False), (et(NEXT + timedelta(days=1), 4, 0), NEXT, True),
+        (et(NEXT, 0, 15), NIGHT, False), (et(NEXT, 4, 0), NIGHT, True),
+        (et(NEXT + timedelta(days=1), 0, 15), NEXT, False), (et(NEXT + timedelta(days=1), 4, 0), NEXT, True),
     ]
 
 
@@ -199,10 +199,10 @@ def test_scoreboard_down_falls_back_to_the_fixed_first_check(monkeypatch):
 
 
 def test_afternoon_only_slate_runs_that_afternoon_for_its_own_us_date(monkeypatch):
-    """A single 14:00 ET game (e.g. in Europe): the attempt at 16:45 ET is
-    23:45 the same day in Israel, so the night must be passed explicitly."""
-    calls = run_loop(monkeypatch, et(NIGHT, 9), et(NEXT, 12), done_from(et(NIGHT, 16, 45)), tip_at(14, 0))
-    assert calls[0] == (et(NIGHT, 16, 45), NIGHT, False)
+    """A single 14:00 ET game (e.g. in Europe): the attempt at 16:15 ET is
+    23:15 the same day in Israel, so the night must be passed explicitly."""
+    calls = run_loop(monkeypatch, et(NIGHT, 9), et(NEXT, 12), done_from(et(NIGHT, 16, 15)), tip_at(14, 0))
+    assert calls[0] == (et(NIGHT, 16, 15), NIGHT, False)
     assert calls[1] == (et(NEXT, 4, 0), NIGHT, True)
 
 
@@ -210,8 +210,8 @@ def test_a_tip_off_moved_later_pushes_the_attempt_later(monkeypatch):
     # Planned at noon with a 22:00 tip; from 18:00 the scoreboard says 23:00.
     def tips(night, now):
         return (et(night, 23 if now >= et(NIGHT, 18) else 22), True)
-    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 45)), tips)
-    assert calls[0][0] == et(NEXT, 1, 45)
+    calls = run_loop(monkeypatch, START, et(NEXT, 12), done_from(et(NEXT, 1, 15)), tips)
+    assert calls[0][0] == et(NEXT, 1, 15)
 
 
 def test_long_waits_are_cut_so_the_plan_is_read_again(monkeypatch):
@@ -242,25 +242,25 @@ def test_restart_right_before_the_deadline_still_runs_the_final_attempt(monkeypa
 def test_restart_during_the_day_waits_for_tonight(monkeypatch):
     calls = run_loop(monkeypatch, et(NEXT, 9, 0), et(NEXT + timedelta(days=1), 2),
                      lambda now, night, final: "processed", tip_at(22, 0))
-    assert calls[0] == (et(NEXT + timedelta(days=1), 0, 45), NEXT, False)
+    assert calls[0] == (et(NEXT + timedelta(days=1), 0, 15), NEXT, False)
 
 
 def test_a_failed_attempt_is_retried_and_a_failed_deadline_still_moves_on(monkeypatch):
     def outcome(now, night, final):
-        if night == NIGHT and now < et(NEXT, 1, 30):
+        if night == NIGHT and now < et(NEXT, 1, 0):
             return RuntimeError("db down")
         if night == NIGHT and final:
             return RuntimeError("db down again")
         return "processed"
     calls = run_loop(monkeypatch, START, et(NEXT + timedelta(days=1), 2), outcome, tip_at(22, 30))
-    assert [c[0] for c in calls if c[1] == NIGHT] == [et(NEXT, 1, 15), et(NEXT, 1, 30), et(NEXT, 4, 0)]
+    assert [c[0] for c in calls if c[1] == NIGHT] == [et(NEXT, 0, 45), et(NEXT, 1, 0), et(NEXT, 4, 0)]
     assert calls[-1][1] == NEXT            # the failing deadline did not stop the scheduler
 
 
 def test_next_trigger_is_reported_for_health(monkeypatch):
     sched._next_trigger = None
-    run_loop(monkeypatch, START, et(NIGHT, 13), done_from(et(NEXT, 1, 15)), tip_at(22, 30))
-    assert sched.next_trigger() == et(NEXT, 1, 15)
+    run_loop(monkeypatch, START, et(NIGHT, 13), done_from(et(NEXT, 0, 45)), tip_at(22, 30))
+    assert sched.next_trigger() == et(NEXT, 0, 45)
 
 
 def test_read_last_tip_reports_an_unreadable_scoreboard(monkeypatch):
