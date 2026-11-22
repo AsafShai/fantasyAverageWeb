@@ -631,6 +631,7 @@ class TestWindowedPlayersCache:
         await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
         entry = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         entry['ts'] = entry['ts'] - player_service_module._WINDOWED_PLAYERS_STALE
+        entry['agg_ts'] = entry['agg_ts'] - player_service_module._WINDOWED_AGG_TTL   # aggregate due again
         player_service.data_provider.db_service.aggregate_player_games = AsyncMock(return_value=(
             pl.DataFrame({'player_id': [1], 'player_name': ['Player 0'], 'gp': [1], 'pts': [30.0]}),
             date(2026, 7, 9), date(2026, 7, 9),
@@ -642,9 +643,10 @@ class TestWindowedPlayersCache:
 
     @pytest.mark.asyncio
     async def test_entry_past_stale_window_reuses_players_when_inputs_unchanged(self, player_service, many_players_df):
-        """Past the TTL both inputs are fetched again; the same ESPN frame
-        object (a 304, or an equal frame) and an equal DB aggregate give the
-        same list, so it is kept instead of rebuilt."""
+        """Past the TTL ESPN is fetched again while the DB aggregate is reused
+        (it only changes with the nightly, which clears the cache); the same
+        ESPN frame object (a 304, or an equal frame) gives the same list, so it
+        is kept instead of rebuilt."""
         player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
         player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
 
@@ -655,12 +657,36 @@ class TestWindowedPlayersCache:
         second = await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
 
         assert player_service.data_provider.get_players_df.await_count == 2
-        assert player_service.data_provider.db_service.aggregate_player_games.await_count == 2
+        assert player_service.data_provider.db_service.aggregate_player_games.await_count == 1
         assert player_service.response_builder.build_all_players_response.call_count == 1
         assert second.players == first.players
         assert second.players[0] is first.players[0]
         fresh = player_service_module._windowed_players_cache[StatTimePeriod.SEASON]
         assert player_service_module.datetime.now() - fresh['ts'] < player_service_module._WINDOWED_PLAYERS_TTL
+
+    @pytest.mark.asyncio
+    async def test_rebuild_reads_the_db_again_after_a_night_clear(self, player_service, many_players_df):
+        """The reused aggregate lasts until the nightly records a night
+        (clear_night_caches), then the next build reads the DB."""
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+        player_service_module.clear_night_caches()
+        await player_service.get_all_players(page=1, limit=1200, time_period=StatTimePeriod.SEASON)
+
+        assert player_service.data_provider.db_service.aggregate_player_games.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_custom_range_always_reads_the_db(self, player_service, many_players_df):
+        player_service.data_provider.get_players_df = AsyncMock(return_value=many_players_df)
+        player_service.response_builder.build_all_players_response.side_effect = self._build_side_effect
+        for _ in range(2):
+            await player_service.get_all_players(
+                page=1, limit=1200, time_period=StatTimePeriod.CUSTOM,
+                start=date(2026, 11, 1), end=date(2026, 11, 7),
+            )
+        assert player_service.data_provider.db_service.aggregate_player_games.await_count == 2
 
     @pytest.mark.asyncio
     async def test_expired_entry_is_served_while_it_rebuilds_in_background(self, player_service, many_players_df):
