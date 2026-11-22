@@ -529,3 +529,40 @@ class TestStartupReconcile:
     async def test_matching_table_queues_nothing(self, monkeypatch):
         await self._init(monkeypatch, [self._row("Same")], inj.InjuryReport([_rec(player="Same")]))
         assert inj._pending_db_writes == {}
+
+
+class TestNewTeamsFromMirror:
+    """A team new to memory (first report of the day that lists it) is checked
+    against the in-memory table copy, not the database."""
+
+    @pytest.mark.asyncio
+    async def test_stale_rows_come_from_the_mirror_without_the_db(self, monkeypatch):
+        from unittest.mock import AsyncMock, MagicMock
+
+        inj._load_table_rows([
+            {"team": "BOS", "player": "Gone", "status": "Out"},
+            {"team": "BOS", "player": "Still", "status": "Out"},
+            {"team": "NYK", "player": "Other", "status": "Out"},   # team not in the report
+        ])
+        monkeypatch.setattr(inj, "injury_store", {"LAL|A": _rec(player="A")})
+        monkeypatch.setattr(inj, "fetch_pdf_bytes", AsyncMock(return_value=b"pdf"))
+        monkeypatch.setattr(inj, "parse_injury_report", lambda _: inj.InjuryReport(
+            [_rec(player="A"), _rec(team="BOS", player="Still")]))
+        db = MagicMock(upsert_injury_status=AsyncMock(), delete_injury_status=AsyncMock(),
+                       get_injury_statuses_for_teams=AsyncMock(return_value=[]))
+        monkeypatch.setattr(inj, "get_db_service", lambda: db)
+        broadcast = AsyncMock()
+        monkeypatch.setattr(inj, "broadcast_notifications", broadcast)
+        monkeypatch.setattr(inj, "broadcast_fetch_update", AsyncMock())
+        monkeypatch.setattr("app.routes.matchups.apply_injury_changes", MagicMock())
+
+        assert await inj._try_update_injury_data() is True
+
+        db.get_injury_statuses_for_teams.assert_not_awaited()
+        db.delete_injury_status.assert_not_awaited()
+        assert inj._pending_db_writes["BOS|Gone"] == ("BOS", "Gone")
+        assert "BOS|Still" not in {k for k, v in inj._pending_db_writes.items() if isinstance(v, tuple)}
+        tags = {r["player"] for r in inj.injury_status_rows()}
+        assert "Gone" not in tags and {"Still", "Other"} <= tags
+        removed = [n for n in broadcast.await_args.args[0] if n.type == "removed"]
+        assert [(n.team, n.player) for n in removed] == [("BOS", "Gone")]

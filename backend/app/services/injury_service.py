@@ -599,18 +599,29 @@ async def _try_update_injury_data(attempt_note: str = "") -> bool:
     teams_only_in_pdf = teams_in_new - teams_in_memory
 
     if teams_only_in_pdf:
-        # This read wakes the database anyway, and must not see rows that
-        # queued deletes have already dropped from memory.
-        await flush_pending_db_writes()
-        db_records = await db_service.get_injury_statuses_for_teams(list(teams_only_in_pdf))
         new_keys = {f"{rec.team}|{rec.player}" for rec in new_records}
+        if _table_rows is not None:
+            # The in-memory mirror is the table with the queued writes applied,
+            # so the stale rows come from it without waking the database; their
+            # deletes join the hourly flush.
+            db_records = [dict(r) for r in _table_rows.values() if r["team"] in teams_only_in_pdf]
+            from_mirror = True
+        else:
+            # No mirror yet: read the table, which must not see rows that
+            # queued deletes have already dropped from memory.
+            await flush_pending_db_writes()
+            db_records = await db_service.get_injury_statuses_for_teams(list(teams_only_in_pdf))
+            from_mirror = False
         for row in db_records:
             key = f"{row['team']}|{row['player']}"
             if key not in new_keys:
-                if not await db_service.delete_injury_status(row['team'], row['player']):
-                    _pending_db_writes[key] = (row['team'], row['player'])
-                if _table_rows is not None:
-                    _table_rows.pop(key, None)
+                if from_mirror:
+                    _queue_delete(row['team'], row['player'])
+                else:
+                    if not await db_service.delete_injury_status(row['team'], row['player']):
+                        _pending_db_writes[key] = (row['team'], row['player'])
+                    if _table_rows is not None:
+                        _table_rows.pop(key, None)
                 notifications.append(InjuryNotification(
                     type="removed",
                     player=row['player'],
