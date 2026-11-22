@@ -56,7 +56,10 @@ _DB_EXTRA_STAT_COLS = {
 # data instead — equivalent to today during the season, still meaningful
 # after it ends. Cached briefly since this only moves at most once/day
 # (nightly ingest) but this runs on every players/team request.
-_SEASON_ANCHOR_TTL = timedelta(hours=1)
+# Cleared by clear_night_caches when the nightly records a night (or the
+# correction sweep rewrites one), so the TTL is only a safety net: each read
+# wakes the scale-to-zero database for at least five minutes.
+_SEASON_ANCHOR_TTL = timedelta(hours=6)
 _season_anchor_cache: dict = {'season': None, 'date': None, 'ts': None}
 
 
@@ -79,6 +82,12 @@ _WINDOWED_PLAYERS_TTL = timedelta(minutes=5)
 # who happened to arrive after expiry used to wait for. Older than this (an
 # idle stretch), the request rebuilds in the foreground as before.
 _WINDOWED_PLAYERS_STALE = timedelta(minutes=30)
+# The DB half of a preset list (the fs_player_games aggregate and its window)
+# only changes when the nightly records a night or the correction sweep
+# rewrites one, and both clear this cache (clear_night_caches). So a rebuild
+# past the TTL re-fetches only ESPN and reuses the stored aggregate: page
+# views no longer wake the database every 5 minutes. The TTL is a safety net.
+_WINDOWED_AGG_TTL = timedelta(hours=6)
 _windowed_players_cache: dict = {}
 # Bumped by clear_night_caches: a build that started before the nightly
 # recorded a night must not store what it read.
@@ -381,15 +390,21 @@ class PlayerService:
         stat_split_id = StatTimePeriod.to_stat_split_id(time_period)
         # The two inputs are independent; fetching them together overlaps
         # the ESPN download with the DB round trips.
-        espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
-            self.data_provider.get_players_df(stat_split_id),
-            compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
-        )
+        previous = _windowed_players_cache.get(time_period) if is_preset else None
+        if previous is not None and datetime.now() - previous['agg_ts'] < _WINDOWED_AGG_TTL:
+            espn_players_df = await self.data_provider.get_players_df(stat_split_id)
+            agg_df, actual_start, actual_end = previous['agg_df'], previous['start'], previous['end']
+            agg_ts = previous['agg_ts']
+        else:
+            espn_players_df, (agg_df, actual_start, actual_end) = await asyncio.gather(
+                self.data_provider.get_players_df(stat_split_id),
+                compute_windowed_agg(time_period, self.data_provider.db_service, start, end),
+            )
+            agg_ts = datetime.now()
 
         if espn_players_df is None or espn_players_df.is_empty():
             raise ResourceNotFoundError("No players found")
 
-        previous = _windowed_players_cache.get(time_period) if is_preset else None
         if (
             previous is not None
             and previous['espn_df'] is espn_players_df
@@ -414,6 +429,6 @@ class PlayerService:
                 'players': all_players, 'total_count': total_count,
                 'start': actual_start, 'end': actual_end,
                 'categories': categories, 'ts': datetime.now(), 'built_ts': built_ts,
-                'espn_df': espn_players_df, 'agg_df': agg_df,
+                'espn_df': espn_players_df, 'agg_df': agg_df, 'agg_ts': agg_ts,
             }
         return all_players, total_count, actual_start, actual_end
