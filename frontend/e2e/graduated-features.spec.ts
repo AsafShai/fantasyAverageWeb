@@ -38,11 +38,7 @@ test('Team page: roster coverage, stats period controls and schedule toggle', as
   await page.getByRole('button', { name: 'Stats', exact: true }).click()
   await expect(page).toHaveURL(/mode=stats/)
   await expect(page.locator('th', { hasText: 'Matchup' })).toHaveCount(0)
-  if (!isMobile(page)) {
-    await expect(page.locator('th', { hasText: 'FG%' })).toBeVisible()
-  } else {
-    await expect(page.getByRole('button', { name: 'FG%', exact: true }).first()).toBeVisible()
-  }
+  await expect(page.locator('th', { hasText: 'FG%' }).first()).toBeVisible()
   await expect(page.getByRole('button', { name: 'Schedule', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Custom' })).toBeVisible()
 })

@@ -103,6 +103,7 @@ describe('Player Rankings · phone redesign', () => {
     await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: /Filters/ }))
     const sheet = screen.getByRole('dialog', { name: 'Filters' })
+    expect(within(sheet).queryByRole('option')).not.toBeInTheDocument()
     await user.type(within(sheet).getByRole('searchbox', { name: 'Search NBA teams' }), 'sixers')
     expect(within(sheet).getByRole('option', { name: /Philadelphia 76ers/ })).toBeInTheDocument()
     expect(within(sheet).getAllByRole('option')).toHaveLength(1)

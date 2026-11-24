@@ -114,14 +114,16 @@ export function NbaTeamFilter({ selected, onChange, variant = 'menu' }: Props) {
           </ChipRow>
         )}
         <label className="mr-search">{search}</label>
-        <TeamOptions
-          id={listId}
-          query={query}
-          selected={selected}
-          onToggle={toggle}
-          className="mr-pr-teams"
-          optionClass={() => 'mr-opt'}
-        />
+        {query.trim() && (
+          <TeamOptions
+            id={listId}
+            query={query}
+            selected={selected}
+            onToggle={toggle}
+            className="mr-pr-teams"
+            optionClass={() => 'mr-opt'}
+          />
+        )}
       </div>
     )
   }

@@ -32,6 +32,11 @@
 .mr-pr-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--mr-divider); }
 .mr-pr-foot .mr-meta { flex: 1; }
 
+/* Desktop table: the same my-team row as the phone table, including the sticky name cell. */
+.pr-rankings tr.mr-me > td {
+  background-color: var(--mr-row-me) !important;
+}
+
 /* table */
 .mr-pr-results { scroll-margin-top: calc(var(--mr-hdr-h) + 8px); }
 .mr-pr-table { max-height: calc(100dvh - var(--mr-hdr-h) - var(--mr-tabbar-h) - 24px); overflow-y: auto; }
