@@ -77,7 +77,7 @@ export default function ManagerHintsCard({
   layout = 'desktop',
   embedded = false,
 }: ManagerHintsCardProps) {
-  const { isLoading, visible, hiddenCount, dismiss, teamName: loadedName, expandAll } = useTeamHints(teamId, {
+  const { visible, hiddenCount, dismiss, teamName: loadedName, expandAll } = useTeamHints(teamId, {
     teamDetail,
     rosterDay,
     slateDate,
@@ -86,6 +86,8 @@ export default function ManagerHintsCard({
   const [expanded, setExpanded] = useState(false)
   const displayName = teamName ?? loadedName ?? 'your team'
   const rows = expanded ? expandAll : visible
+
+  if (expandAll.length === 0) return null
 
   const sectionClass = [
     'mgr-hints-section',
@@ -111,24 +113,6 @@ export default function ManagerHintsCard({
       )}
     </div>
   )
-
-  if (isLoading) {
-    return (
-      <section className={sectionClass} aria-busy="true" aria-label="Manager hints">
-        {head}
-        <p className="mgr-hints-empty">Loading manager hints…</p>
-      </section>
-    )
-  }
-
-  if (rows.length === 0) {
-    return (
-      <section className={sectionClass} aria-label="Manager hints">
-        {head}
-        <p className="mgr-hints-empty">No strong suggestions right now — your lineup looks reasonable.</p>
-      </section>
-    )
-  }
 
   return (
     <section className={sectionClass} aria-label="Manager hints">

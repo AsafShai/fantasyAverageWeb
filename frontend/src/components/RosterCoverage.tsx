@@ -93,13 +93,13 @@ export default function RosterCoverage({
   if (error) return <ErrorMessage message={getErrorMessage(error, 'Failed to load schedule coverage')} />
   if (!schedule || !visibleDays.length) return null
 
-  const shell = embedded ? 'p-4 sm:p-6 dark:bg-gray-800' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'
+  const shell = embedded ? 'mr-desk-cov' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'
 
   return (
     <div className={shell}>
       <div className={`flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between ${embedded ? 'pb-4' : 'border-b border-gray-100 pb-4 dark:border-gray-700'}`}>
         <div>
-          {embedded ? <h2 className="sr-only">Roster coverage</h2> : (
+          {embedded ? <h2>Roster coverage</h2> : (
             <h2 className="text-xl font-bold text-gray-900 sm:text-2xl dark:text-gray-100">Roster coverage</h2>
           )}
           <p className="mt-1 text-xs text-gray-500 sm:hidden dark:text-gray-400">
@@ -123,7 +123,7 @@ export default function RosterCoverage({
         </div>
       </div>
 
-      <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
+      <div className="mr-desk-cov-days mt-4 flex gap-2 overflow-x-auto pb-2">
         {coverage.map(({ day, count, b2bCount }) => (
           <button
             type="button"
@@ -138,7 +138,7 @@ export default function RosterCoverage({
           >
             <div className="text-[10px] font-semibold uppercase leading-none">{formatSlateDate(day.date, { weekday: 'short' })}</div>
             <div className="text-xs leading-none">{formatSlateDate(day.date, { month: 'short', day: 'numeric' })}</div>
-            <div className="mt-2 flex h-24 items-end justify-center" aria-hidden="true">
+            <div className="mr-desk-cov-track" aria-hidden="true">
               <RosterCoverageBar rosterSize={roster.length} count={count} b2bCount={b2bCount} />
             </div>
             <div className="mt-2 flex items-baseline justify-center gap-1 leading-none">

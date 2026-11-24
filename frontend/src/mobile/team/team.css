@@ -18,9 +18,23 @@
 .mr-tm-name b { font-family: var(--mr-font-num); font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
 .mr-tm-chev { color: var(--mr-faint); font-size: 18px; }
 
-/* ── Team page: header card ── */
-.mr-tm-back { align-self: flex-start; padding: 0 2px; }
-.mr-tm-title { margin: 0; font-family: var(--mr-font-num); font-size: 20px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+/* ── Team page: scoreboard (desktop and phone) ── */
+.mr-tm-board {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px; background: var(--mr-card); border: 1px solid var(--mr-border); border-radius: 12px;
+}
+.mr-tm-back { align-self: flex-start; padding: 0; }
+.mr-tm-board-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.mr-tm-identity { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mr-tm-title { margin: 0; font-family: var(--mr-font-num); font-size: 22px; font-weight: 700; line-height: 1.15; overflow-wrap: anywhere; }
+.mr-tm-figures { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 14px; }
+.mr-tm-rank { font-family: var(--mr-font-num); font-size: 28px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.mr-tm-points { display: inline-flex; align-items: baseline; gap: 5px; font-size: 13px; color: var(--mr-muted); }
+.mr-tm-points b { font-family: var(--mr-font-num); font-size: 20px; font-weight: 700; color: var(--mr-text); font-variant-numeric: tabular-nums; }
+.mr-tm-gp { font-size: 13px; font-weight: 600; color: var(--mr-muted); font-variant-numeric: tabular-nums; }
+.mr-tm-tonight { margin-right: 2px; font-size: 12px; font-weight: 700; }
+.mr-tm-tonight.mr-up, .mr-tm-move.mr-up { color: var(--mr-up); }
+.mr-tm-tonight.mr-down, .mr-tm-move.mr-down { color: var(--mr-down); }
 .mr-tm-big { font-family: var(--mr-font-num); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mr-tm-move { font-size: 13px; font-weight: 700; white-space: nowrap; }
 .mr-tm-move.mr-up { color: var(--mr-up); }
@@ -41,16 +55,127 @@
 .dark .mr-tm-cat-high { --mr-cat-bg: #2B4A8F; --mr-cat-fg: #DCE6FF; }
 .dark .mr-tm-cat-mid  { --mr-cat-bg: #1E2B45; --mr-cat-fg: #C7D4F3; }
 .dark .mr-tm-cat-low  { --mr-cat-bg: #4A2716; --mr-cat-fg: #FDBA8C; }
-.mr-tm-actions { display: flex; gap: 8px; align-items: stretch; }
+.mr-tm-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
 .mr-tm-espn {
-  flex: 1; min-height: 42px; border-radius: var(--mr-radius-ctl); background: #DC2626; color: #FFFFFF;
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  font-size: 14px; font-weight: 700; text-decoration: none;
+  min-height: 36px; padding: 0 2px; color: var(--mr-primary); background: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 700; text-decoration: none;
 }
-.mr-tm-espn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.mr-tm-espn:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; border-radius: 4px; }
 /* ShareCardButton keeps its own menu; only its trigger is resized to sit next to ESPN. */
-.mr-tm-share > div > button { min-height: 42px; min-width: 42px; border-radius: var(--mr-radius-ctl); }
+.mr-tm-share > div > button { min-height: 36px; min-width: 36px; border-radius: var(--mr-radius-ctl); }
+.mr-tm-playing {
+  margin: 0; padding: 8px 10px; border-radius: 8px; font-size: 13px; line-height: 1.4;
+  color: var(--mr-text-2); background: var(--mr-sunken);
+}
+
+/* Phone stat cards use the same flat card as the scoreboard. */
+.mr-tm-page .mr-card { border: 1px solid var(--mr-border); border-radius: 12px; }
+/* The page sits on the site background. Cards are the only surfaces. */
+.mr-tm-page.mr-root { background: transparent; }
+
+/* Desktop page shell: context cards, then the roster at the bottom. */
+.mr-tm-desk { max-width: none; margin: 0 auto; width: 100%; box-sizing: border-box; }
+.mr-tm-panel {
+  background: var(--mr-card); border: 1px solid var(--mr-border); border-radius: 12px; padding: 14px; min-width: 0;
+}
+.mr-tm-panel h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.mr-tm-panel-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.mr-tm-context { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 900px) {
+  .mr-tm-desk.mr-page { padding: 8px 28px 28px; gap: 14px; }
+  .mr-tm-context { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) minmax(0, 1.15fr); align-items: stretch; }
+  .mr-tm-context > .mr-tm-panel { height: 100%; }
+  /* Shooting rows and coverage bars grow into the shared row height. */
+  .mr-tm-shoot { display: flex; flex-direction: column; }
+  .mr-tm-shoot-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .mr-tm-shoot-body .mr-tm-kvs { flex-basis: 0; min-height: 0; }
+  .mr-tm-shoot-body .mr-tm-kvs div { flex: 1; align-items: center; }
+  .mr-tm-context > .mr-tm-panel[aria-label="Roster coverage"] { display: flex; flex-direction: column; }
+  .mr-desk-cov { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .mr-desk-cov-days { flex: 1; align-items: stretch; min-height: 0; }
+  .mr-desk-cov-days > button { display: flex; flex-direction: column; }
+  .mr-desk-cov-track { flex: 1; height: auto; min-height: 96px; }
+  .mr-tm-cats { gap: 6px; }
+  .mr-tm-cat { padding: 8px 0; font-size: 11px; }
+  .mr-tm-cat b { font-size: 16px; }
+}
+.mr-tm-kvs { display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.mr-desk-cov-track { display: flex; align-items: flex-end; justify-content: center; height: 96px; margin-top: 8px; }
+.mr-tm-kvs div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.mr-tm-kvs dt { color: var(--mr-muted); }
+.mr-tm-kvs dd { margin: 0; font-family: var(--mr-font-num); font-weight: 700; font-variant-numeric: tabular-nums; }
+.mr-tm-subhead { margin: 14px 0 8px; font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mr-muted); }
+.mr-tm-desk .mr-tm-table-wrap { overflow: auto; max-height: 70vh; }
+.mr-tm-desk table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.mr-tm-desk th, .mr-tm-desk td { border-bottom: 1px solid var(--mr-divider); }
+.mr-tm-avg td { background: var(--mr-primary-soft); border-top: 2px solid var(--mr-primary-2); font-weight: 700; }
 .mr-tm-meta-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+
+/* Roster: the working surface. Header and tools stay padded; the table runs to the card edge. */
+.mr-tm-roster.mr-tm-panel { padding: 0; overflow: hidden; }
+.mr-tm-roster > div > :not(.mr-tm-table-wrap):not(.mr-tm-daily) { padding-left: 14px; padding-right: 14px; }
+.mr-tm-roster > div > :first-child { padding-top: 14px; }
+.mr-tm-roster > div > :not(.mr-tm-table-wrap):not(.mr-tm-daily) { padding-bottom: 10px; }
+.mr-tm-roster-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.mr-tm-roster-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mr-tm-roster-body { display: flex; flex-direction: column; gap: 10px; }
+.mr-tm-roster .mr-tm-table-wrap,
+.mr-tm-roster .mr-tm-daily { overflow: auto; max-height: 70vh; border-top: 1px solid var(--mr-border); background: var(--mr-card); }
+.mr-tm-roster .mr-tm-table-wrap th,
+.mr-tm-roster .mr-tm-table-wrap td,
+.mr-tm-roster .mr-tm-daily th,
+.mr-tm-roster .mr-tm-daily td {
+  color: var(--mr-text);
+  border-bottom-color: var(--mr-divider);
+  font-variant-numeric: tabular-nums;
+}
+.mr-tm-roster .mr-tm-table-wrap thead th,
+.mr-tm-roster .mr-tm-daily thead th {
+  background: var(--mr-table-head);
+  color: var(--mr-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.mr-tm-roster .mr-tm-table-wrap tbody td.sticky,
+.mr-tm-roster .mr-tm-daily tbody td.sticky { background: var(--mr-card); }
+.mr-tm-roster .mr-tm-table-wrap tbody tr:hover td.sticky,
+.mr-tm-roster .mr-tm-daily tbody tr:hover td.sticky { background: var(--mr-sunken); }
+.mr-tm-roster .mr-tm-daily tr[data-lit] td.sticky { background: color-mix(in srgb, var(--mr-primary) 16%, var(--mr-card)); }
+.mr-tm-roster .mr-tm-daily tr[data-on-court="true"] td,
+.mr-tm-roster .mr-tm-daily tr[data-on-court="true"] td.sticky { background: color-mix(in srgb, var(--mr-up) 14%, var(--mr-card)); }
+.mr-tm-roster .mr-tm-avg td,
+.mr-tm-roster .mr-tm-table-wrap .mr-tm-avg td.sticky,
+.mr-tm-roster .mr-tm-daily .mr-tm-avg td.sticky {
+  background: var(--mr-primary-soft);
+  color: var(--mr-text);
+  border-top: 2px solid var(--mr-primary-2);
+}
+.mr-tm-roster .rounded-lg.bg-gray-100 { background: var(--mr-seg-track); border-radius: 11px; }
+.mr-tm-roster .rounded-lg.bg-gray-100 > button,
+.mr-tm-roster .rounded-lg.bg-gray-100 > label {
+  background: transparent; color: var(--mr-text-2); box-shadow: none; border-color: transparent;
+}
+.mr-tm-roster .rounded-lg.bg-gray-100 > button.bg-white,
+.mr-tm-roster .rounded-lg.bg-gray-100 > label { background: var(--mr-seg-on); color: var(--mr-text); box-shadow: var(--mr-shadow-on); border-radius: 8px; }
+.mr-tm-days { display: flex; gap: 6px; overflow-x: auto; }
+.mr-tm-daychip {
+  flex: 0 0 auto; min-width: 68px; border: 1px solid var(--mr-border); background: var(--mr-sunken);
+  border-radius: 10px; padding: 6px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  cursor: pointer; color: var(--mr-text);
+}
+.mr-tm-daychip b { font-size: 12px; font-weight: 700; }
+.mr-tm-daychip span { font-size: 11px; color: var(--mr-muted); font-weight: 600; }
+.mr-tm-daychip[aria-pressed="true"] { background: var(--mr-ink); border-color: var(--mr-ink); color: var(--mr-on-ink); }
+.mr-tm-daychip[aria-pressed="true"] span { color: inherit; opacity: 0.72; }
+.mr-tm-who-card { background: var(--mr-sunken); border-radius: 10px; padding: 10px 12px; }
+.mr-tm-who-card .mr-tm-subhead { margin: 0 0 8px; }
+.mr-tm-moves { margin: 0 0 10px; padding: 8px 10px; border-radius: 10px; background: var(--mr-sunken); }
+.mr-tm-spot { background: var(--mr-primary-soft); }
 
 /* ── key/value rows + tiles ── */
 .mr-kv { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; padding: 3px 0; }

@@ -2,14 +2,15 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Player } from '../../types/api';
+import { MyTeamProvider } from '../../context/MyTeamContext';
 import { renderWithProviders } from '../../test/helpers';
 import PlayerRankings from '../PlayerRankings';
 
-function player(name: string, minutes: number, gp: number, pts: number, proTeam = 'LAL'): Player {
+function player(name: string, minutes: number, gp: number, pts: number, proTeam = 'LAL', positions: string[] = ['PG']): Player {
   return {
     player_name: name,
     pro_team: proTeam,
-    positions: ['PG'],
+    positions,
     stats: {
       pts, reb: 5 * gp, ast: 5 * gp, stl: gp, blk: gp, three_pm: 2 * gp,
       fg_percentage: 0.47, ft_percentage: 0.85,
@@ -115,6 +116,69 @@ describe('PlayerRankings page', () => {
     await waitFor(() => expect(screen.getByText(/No players match “zzz”/)).toBeInTheDocument());
     await user.click(screen.getByText('Clear search', { selector: 'button' }));
     await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+  });
+
+  it('keeps every selected position, and drops a position when it is toggled off', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/players/')) {
+          return jsonResponse({
+            players: [
+              player('Alpha Guard', 700, 20, 600, 'LAL', ['PG']),
+              player('Beta Wing', 300, 10, 150, 'BOS', ['C']),
+            ],
+            total_count: 2, page: 1, limit: 1200, has_more: false,
+          });
+        }
+        if (url.includes('/teams/')) return jsonResponse([]);
+        if (url.includes('/league/activity/latest')) return jsonResponse({ teams: [], moves: [] });
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(<PlayerRankings />);
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument());
+
+    const pg = screen.getByRole('button', { name: 'PG', exact: true });
+    const center = screen.getByRole('button', { name: 'C', exact: true });
+    await user.click(pg);
+    await user.click(center);
+    expect(pg).toHaveAttribute('aria-pressed', 'true');
+    expect(center).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Alpha Guard')).toBeInTheDocument();
+    expect(screen.getByText('Beta Wing')).toBeInTheDocument();
+
+    await user.click(pg);
+    await waitFor(() => expect(screen.queryByText('Alpha Guard')).not.toBeInTheDocument());
+    expect(screen.getByText('Beta Wing')).toBeInTheDocument();
+  });
+
+  it('highlights players on my team with the same row style as the phone table', async () => {
+    localStorage.setItem('fw:myTeam.id', '7');
+    const mine = player('Alpha Guard', 700, 20, 600);
+    mine.team_id = 7;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/players/')) {
+          return jsonResponse({
+            players: [mine, player('Beta Wing', 300, 10, 150, 'BOS')],
+            total_count: 2, page: 1, limit: 1200, has_more: false,
+          });
+        }
+        if (url.includes('/teams/')) return jsonResponse([{ team_id: 7, team_name: 'Mine' }]);
+        if (url.includes('/league/activity/latest')) return jsonResponse({ teams: [], moves: [] });
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(<MyTeamProvider><PlayerRankings /></MyTeamProvider>);
+    await waitFor(() => expect(screen.getByText('Alpha Guard')).toBeInTheDocument());
+
+    expect(screen.getByText('Alpha Guard').closest('tr')).toHaveClass('mr-me');
+    expect(screen.getByText('Beta Wing').closest('tr')).not.toHaveClass('mr-me');
   });
 
   it('filters to the NBA teams you search for, and keeps overall rank', async () => {

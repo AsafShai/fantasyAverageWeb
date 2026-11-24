@@ -203,7 +203,7 @@ export function MovesStrip({ day, highlight, onPick }: { day: RosterDay; highlig
   return (
     // One line per move: time, who came in, who went out (and a note only for a
     // waiver claim, a trade, or a move made after the previous day's lock).
-    <div className="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2" data-testid="roster-day-moves">
+    <div className="mr-tm-moves" data-testid="roster-day-moves">
       <div className="flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-6">
         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Moves</span>
         {day.moves.length === 0 && <span className="text-sm text-gray-500">No adds or drops this day</span>}
@@ -756,7 +756,7 @@ export function RosterDayContent({
             </div>
           )}
         </div>
-        <div className="hidden overflow-auto max-h-[70vh] sm:block mq-scroll-container">
+        <div className="mr-tm-daily hidden sm:block mq-scroll-container">
           <table className="min-w-full border-separate border-spacing-0 [&_th]:border-b [&_td]:border-b [&_th]:border-gray-200 [&_td]:border-gray-200" data-testid="roster-day-table">
             <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
               <tr>

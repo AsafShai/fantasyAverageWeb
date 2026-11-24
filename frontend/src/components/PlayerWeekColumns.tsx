@@ -9,10 +9,30 @@ export type ScheduleHorizon = (typeof SCHEDULE_HORIZONS)[number]
 export function ScheduleHorizonToggle({
   value,
   onChange,
+  variant = 'classic',
 }: {
   value: ScheduleHorizon
   onChange: (value: ScheduleHorizon) => void
+  /** `segmented` matches the team-page roster. Other pages keep the classic buttons. */
+  variant?: 'classic' | 'segmented'
 }) {
+  if (variant === 'segmented') {
+    return (
+      <div className="mr-seg mr-sm mr-fit" role="group" aria-label="Schedule horizon">
+        {SCHEDULE_HORIZONS.map(days => (
+          <button
+            key={days}
+            type="button"
+            aria-pressed={value === days}
+            className="mr-seg-btn"
+            onClick={() => onChange(days)}
+          >
+            {days} days
+          </button>
+        ))}
+      </div>
+    )
+  }
   return (
     <div className="flex w-full overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600">
       {SCHEDULE_HORIZONS.map((days, index) => (
@@ -41,13 +61,33 @@ export function StatsScheduleToggle({
   mode,
   onChange,
   includeDaily = false,
+  variant = 'classic',
 }: {
   mode: PlayerTableMode
   onChange: (mode: PlayerTableMode) => void
   /** Adds the Daily (roster by day) mode, first. Team page only. */
   includeDaily?: boolean
+  /** `segmented` matches the team-page roster. Other pages keep the classic buttons. */
+  variant?: 'classic' | 'segmented'
 }) {
   const modes: PlayerTableMode[] = includeDaily ? ['daily', 'stats', 'schedule'] : ['stats', 'schedule']
+  if (variant === 'segmented') {
+    return (
+      <div className="mr-seg mr-sm mr-fit" role="group" aria-label="Roster view">
+        {modes.map(value => (
+          <button
+            key={value}
+            type="button"
+            aria-pressed={mode === value}
+            className="mr-seg-btn"
+            onClick={() => onChange(value)}
+          >
+            {MODE_LABELS[value]}
+          </button>
+        ))}
+      </div>
+    )
+  }
   return (
     <div className="flex w-full self-start overflow-hidden rounded border border-gray-300 sm:w-auto dark:border-gray-600">
       {modes.map((value, index) => (

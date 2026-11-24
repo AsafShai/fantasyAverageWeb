@@ -8,8 +8,10 @@ test('desktop: Team page keeps every section on one page', async ({ page }) => {
   await page.goto('/team/1?ff=mobile')
   await expect(page.getByRole('heading', { name: /Fantasy One/ }).first()).toBeVisible()
   await expect(page.getByTestId('mobile-team-page')).toHaveCount(0)
-  await expect(page.getByRole('button', { name: /Team statistics/ })).toBeVisible()
-  await expect(page.getByRole('button', { name: /Roster coverage/ })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Team summary' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Shooting and averages' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Roster coverage' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Roster' })).toBeVisible()
   await expect(page).not.toHaveURL(/tab=/)
 })
 

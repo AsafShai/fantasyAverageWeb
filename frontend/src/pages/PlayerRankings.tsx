@@ -19,7 +19,14 @@ import InfoTip from '../components/InfoTip'
 import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
 import type { TimePeriod, CustomDateRange } from '../types/api'
 import { useMobileRedesign } from '../mobile/flag'
+import { PositionFilter } from '../mobile/ui'
 import PlayerRankingsMobile from '../mobile/pages/playerRankings/PlayerRankingsMobile'
+import '../mobile/pages/playerRankings/playerRankings.css'
+import {
+  matchesFantasyTeam,
+  parseFantasyTeamFilter,
+  type FantasyTeamFilter,
+} from '../mobile/pages/playerRankings/filters'
 import {
   computePlayerRankings,
   getRawValue,
@@ -39,11 +46,16 @@ const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) 
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
-import {
-  matchesFantasyTeam,
-  parseFantasyTeamFilter,
-  type FantasyTeamFilter,
-} from '../mobile/pages/playerRankings/filters'
+/** The old desktop control stored one position. Keep it when the multi-select has never been saved. */
+function savedPositions(): string[] | undefined {
+  try {
+    if (localStorage.getItem('fw:playerRankings.positions') !== null) return undefined
+    const single = JSON.parse(localStorage.getItem('fw:playerRankings.position') ?? 'null')
+    return typeof single === 'string' && ALL_POSITIONS.includes(single) ? [single] : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /** Short fantasy code. team_id 0 is a free agent or on waivers. */
 function fantasyTeamAbbrev(teamId: number, abbrevById: Map<number, string>): string {
@@ -114,9 +126,8 @@ export default function PlayerRankings() {
   const [displayMode, setDisplayMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.displayMode', 'per_game')
   const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
-  const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
-  // Phone picks several positions; desktop keeps its single select (separate state so each stays as it was).
-  const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [])
+  const [positionsSeed] = useState(savedPositions)
+  const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [], positionsSeed)
   const [nbaTeamsRaw, setNbaTeams] = usePersistedState<string[]>('playerRankings.nbaTeams', [])
   const nbaTeams = useMemo(() => parseNbaTeams(nbaTeamsRaw), [nbaTeamsRaw])
   useEffect(() => {
@@ -167,7 +178,6 @@ export default function PlayerRankings() {
     setCustomRange(null)
     setMinGp(0)
     setMinMin(0)
-    setPosition(null)
     setPositionsPicked([])
     setNbaTeams([])
     setFantasyTeam(null)
@@ -179,7 +189,7 @@ export default function PlayerRankings() {
   const isPunted = (cat: RankingCategory) => effectiveWeights[cat] === 0
 
   const recompute = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position: mobile ? null : position, positions: mobile ? positionsPicked : undefined, weights: effectiveWeights }
+    const config: RankingsConfig = { calcMode, minGp, minMin, position: null, positions: positionsPicked, weights: effectiveWeights }
     const next = computePlayerRankings(players, config, categories, reverseCategories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
@@ -213,14 +223,14 @@ export default function PlayerRankings() {
   useEffect(() => {
     if (players.length > 0 && hasCalculated) recompute()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weights, calcMode])
+  }, [weights, calcMode, positionsPicked])
 
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
     const filtered = rankedPlayers.filter(r =>
       r.player.stats.gp >= minGp &&
       (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
-      matchesPositionFilter(r.player.positions, mobile ? null : position, mobile ? positionsPicked : undefined)
+      matchesPositionFilter(r.player.positions, null, positionsPicked)
     )
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
@@ -241,7 +251,7 @@ export default function PlayerRankings() {
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, positionsPicked, mobile, fantasyTeam, nbaTeams, displayMode, displayLimit, searchQuery])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, positionsPicked, fantasyTeam, nbaTeams, displayMode, displayLimit, searchQuery])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -389,16 +399,8 @@ export default function PlayerRankings() {
               <NbaTeamFilter selected={nbaTeams} onChange={setNbaTeams} />
             </div>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Position</label>
-              <select
-                value={position ?? ''}
-                onChange={e => setPosition(e.target.value || null)}
-                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              >
-                <option value="">All</option>
-                {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+            <div className="col-span-2">
+              <PositionFilter options={ALL_POSITIONS} selected={positionsPicked} onChange={setPositionsPicked} />
             </div>
 
             <div className="min-w-0 sm:col-span-2 lg:col-span-3">
@@ -477,7 +479,7 @@ export default function PlayerRankings() {
         )}
 
         {hasCalculated && sortedPlayers.length > 0 && (
-          <div ref={resultsRef} className="scroll-mt-20 bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
+          <div ref={resultsRef} className="pr-rankings scroll-mt-20 bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -499,7 +501,10 @@ export default function PlayerRankings() {
               </thead>
               <tbody>
                 {sortedPlayers.map(({ ranked, rank }) => (
-                  <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr
+                    key={`${ranked.player.player_name}-${ranked.player.team_id}`}
+                    className={`group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50${ranked.player.team_id !== 0 && isMyTeam(ranked.player.team_id) ? ' mr-me' : ''}`}
+                  >
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{rank}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
