@@ -91,3 +91,26 @@ def test_depthchart_timeout_502(mock_get_raw, mock_get_db, test_client):
 
     response = test_client.get("/api/nba-teams/13/depthchart")
     assert response.status_code == 502
+
+
+@patch("app.routes.nba_teams.get_team_results", new_callable=AsyncMock)
+def test_results_returns_finished_games(mock_results, test_client):
+    mock_results.return_value = [{
+        "game_id": "401910007", "date": "2026-11-18", "is_home": True, "opponent_id": 29,
+        "opponent_abbreviation": "MEM", "team_score": 121, "opponent_score": 124, "won": False,
+    }]
+    response = test_client.get("/api/nba-teams/5/results")
+    assert response.status_code == 200
+    assert response.json()[0]["opponent_abbreviation"] == "MEM"
+    mock_results.assert_awaited_once_with(5)
+
+
+def test_results_404_for_an_unknown_team(test_client):
+    assert test_client.get("/api/nba-teams/99/results").status_code == 404
+
+
+@patch("app.routes.nba_teams.get_team_results", new_callable=AsyncMock)
+def test_results_503_when_espn_is_down(mock_results, test_client):
+    from model_stats_inference.espn.client import EspnUnavailableError
+    mock_results.side_effect = EspnUnavailableError("down")
+    assert test_client.get("/api/nba-teams/5/results").status_code == 503

@@ -346,6 +346,19 @@ export interface ScheduleGame {
   high_volume: boolean;
 }
 
+/** A finished game with its final score, from /nba-teams/{id}/results. */
+export interface TeamGameResult {
+  game_id: string;
+  /** NBA (Eastern) calendar day. */
+  date: string;
+  is_home: boolean;
+  opponent_id: number;
+  opponent_abbreviation: string;
+  team_score: number;
+  opponent_score: number;
+  won: boolean;
+}
+
 export interface ScheduleTeam {
   team_id: number;
   abbreviation: string;

@@ -1,4 +1,5 @@
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../test/helpers'
 import TeamScheduleView from '../TeamScheduleView'
@@ -28,14 +29,20 @@ const schedule = {
   }],
 }
 
+const result = (id: string, date: string, won: boolean, us: number, them: number) => ({
+  game_id: id, date, is_home: true, opponent_id: 2, opponent_abbreviation: 'BOS', team_score: us, opponent_score: them, won,
+})
+const results = [result('1', '2026-10-20', true, 110, 101), result('2', '2026-10-21', false, 99, 104)]
+
 describe('TeamScheduleView', () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     vi.setSystemTime(new Date('2026-10-26T16:00:00Z'))
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(schedule), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    })))
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url
+      const body = url.includes('/results') ? results : schedule
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }))
   })
 
   afterEach(() => {
@@ -52,5 +59,38 @@ describe('TeamScheduleView', () => {
     expect(screen.getByText('Games left').parentElement).toHaveTextContent('2')
     expect(screen.getByText('Back-to-backs left').parentElement).toHaveTextContent('1')
     expect(screen.getByText('High-volume left').parentElement).toHaveTextContent('1')
+  })
+  it('shows results in date order with scores and box score links', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    renderWithProviders(<TeamScheduleView teamId="13" />)
+    await user.click(await screen.findByRole('button', { name: /^Results/ }))
+    expect(screen.getByRole('button', { name: /^Results/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(localStorage.getItem('fw:team-schedule-view')).toBe('results')
+    const links = await screen.findAllByRole('link', { name: /^Box score:/ })
+    expect(links.map(link => link.getAttribute('href'))).toEqual([
+      '/box-scores?date=2026-10-20&game=1',
+      '/box-scores?date=2026-10-21&game=2',
+    ])
+    expect(links[0]).toHaveAccessibleName('Box score: Win 110-101 vs Past Opponent, Oct 20')
+    expect(screen.getByText('110-101')).toBeInTheDocument()
+    expect(screen.queryByText('Tonight Opponent')).not.toBeInTheDocument()
+    expect(screen.getByText('Record').parentElement).toHaveTextContent('1-1')
+    expect(screen.getByText(/1-1 · 2 played, 2 left/)).toBeInTheDocument()
+  })
+
+  it('shows the whole season with a line at today', async () => {
+    localStorage.setItem('fw:team-schedule-view', 'all')
+    renderWithProviders(<TeamScheduleView teamId="13" />)
+    expect(await screen.findByText('Tonight Opponent')).toBeInTheDocument()
+    expect(screen.getByText('Past Opponent')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true')
+    const today = screen.getByTestId('schedule-today')
+    expect(today).toHaveTextContent('Today · Oct 26')
+    const rows = [...screen.getByRole('table').querySelectorAll('tr[data-row-index]')]
+    // Today's line sits right before tonight's game, the first not yet played.
+    expect(today.compareDocumentPosition(rows[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(today.compareDocumentPosition(rows[1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+    expect(await screen.findAllByRole('link', { name: /^Box score:/ })).toHaveLength(2)
+    expect(screen.getByText('0 · B2B')).toBeInTheDocument()
   })
 })

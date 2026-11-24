@@ -1,18 +1,20 @@
 import { Fragment, useMemo } from 'react'
+import { Link } from 'react-router'
 import type { FetchBaseQueryError } from '@reduxjs/toolkit/query'
 import type { SerializedError } from '@reduxjs/toolkit'
-import type { NbaTeamInfo } from '../../types/api'
+import type { NbaTeamInfo, ScheduleTeam } from '../../types/api'
 import { DEPTH_EXCLUDE_STATUSES, DEPTH_LABELS, DEPTH_MAX, useNbaDepthChart } from '../../hooks/useNbaDepthChart'
 import { useGetScheduleQuery } from '../../store/api/fantasyApi'
 import { METRIC_GLOSSARY } from '../../constants/metricGlossary'
-import { formatScheduleDate, monthKey, monthLabel, remainingSchedule, slateLevel } from '../../utils/teamSchedule'
+import { boxScoreHref, easternToday, formatScheduleDate, monthKey, monthLabel, slateLevel, type ScheduleView } from '../../utils/teamSchedule'
+import { useTeamScheduleView } from '../../hooks/useTeamScheduleView'
 import { getErrorMessage } from '../../utils/errorMessage'
 import { nbaTeamLogoUrl } from '../../utils/nbaImages'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import InfoTip from '../../components/InfoTip'
 import LoadingSpinner from '../../components/LoadingSpinner'
 import ErrorMessage from '../../components/ErrorMessage'
-import { Card, Chip, ChipRow, FaMark, SelectSheet, StatusPill } from '../ui'
+import { Card, Chip, ChipRow, FaMark, Segmented, SelectSheet, StatusPill, type SegmentedOption } from '../ui'
 import './nba.css'
 
 interface MobileNbaTeamsProps {
@@ -149,11 +151,11 @@ function DepthChartCard({ teamId }: { teamId: string }) {
   )
 }
 
-function Kpi({ label, value, metric }: { label: string; value: number; metric: keyof typeof METRIC_GLOSSARY }) {
-  const info = METRIC_GLOSSARY[metric]
+function Kpi({ label, value, metric }: { label: string; value: number | string; metric?: keyof typeof METRIC_GLOSSARY }) {
+  const info = metric ? METRIC_GLOSSARY[metric] : null
   return (
     <div className="mr-nba-tile">
-      <span className="mr-nba-tile-label">{label}<InfoTip title={info.title} body={info.body} /></span>
+      <span className="mr-nba-tile-label">{label}{info && <InfoTip title={info.title} body={info.body} />}</span>
       <span className="mr-nba-tile-value">{value}</span>
     </div>
   )
@@ -179,52 +181,125 @@ function TeamScheduleCard({ teamId }: { teamId: string }) {
   )
 }
 
-function TeamScheduleBody({ team }: { team: NonNullable<ReturnType<typeof useGetScheduleQuery>['data']>['teams'][number] }) {
-  const { games, b2bLeft, highVolumeLeft } = remainingSchedule(team)
+const SCHEDULE_VIEWS: SegmentedOption<ScheduleView>[] = [
+  { value: 'results', label: 'Results' },
+  { value: 'upcoming', label: 'Upcoming' },
+  { value: 'all', label: 'All' },
+]
+
+function TeamScheduleBody({ team }: { team: ScheduleTeam }) {
+  const [s, scrollRef] = useTeamScheduleView(team)
+  const { view, shown, todayIndex } = s
+  const showToday = view === 'all' && todayIndex > 0 && todayIndex < shown.length
+  const heads = view === 'results' ? ['RESULT', ''] : view === 'upcoming' ? ['REST DAYS', 'SLATE SIZE'] : ['RESULT · REST', 'SLATE']
+  const empty = view === 'results' ? 'No games played yet.' : view === 'upcoming' ? 'No games left this season.' : 'No games published yet.'
   return (
     <>
-      {team.total_games < 82 && (
+      <p className="mr-meta">{s.record ? `${s.record.record} · ` : ''}{s.played} played, {s.left} left</p>
+      <Segmented
+        label="Show games"
+        options={SCHEDULE_VIEWS.map((o) => ({ ...o, label: `${o.label} ${s.counts[o.value]}` }))}
+        value={view}
+        onChange={s.setView}
+      />
+      {team.total_games < 82 && view !== 'results' && (
         <div className="mr-nba-info">
           <b>{team.total_games} games are published.</b> Two Cup knockout slots are held for mid-December and will be added when scheduled.
         </div>
       )}
       <div className="mr-nba-tiles">
-        <Kpi label="Games left" value={games.length} metric="scheduleLeft" />
-        <Kpi label="Back-to-backs left" value={b2bLeft} metric="scheduleB2BLeft" />
-        <Kpi label="High-volume left" value={highVolumeLeft} metric="scheduleHighVolumeLeft" />
+        {view === 'upcoming' && (
+          <>
+            <Kpi label="Games left" value={s.left} metric="scheduleLeft" />
+            <Kpi label="Back-to-backs left" value={s.b2bLeft} metric="scheduleB2BLeft" />
+            <Kpi label="High-volume left" value={s.highVolumeLeft} metric="scheduleHighVolumeLeft" />
+          </>
+        )}
+        {view === 'results' && (
+          <>
+            <Kpi label="Record" value={s.record?.record ?? '—'} />
+            <Kpi label="Home" value={s.record?.home ?? '—'} />
+            <Kpi label="Away" value={s.record?.away ?? '—'} />
+          </>
+        )}
+        {view === 'all' && (
+          <>
+            <Kpi label="Record" value={s.record?.record ?? '—'} />
+            <Kpi label="Games left" value={s.left} metric="scheduleLeft" />
+            <Kpi label="Back-to-backs left" value={s.b2bLeft} metric="scheduleB2BLeft" />
+          </>
+        )}
       </div>
-      <div className="mr-tw mr-nba-scroll">
+      {s.resultsFailed && view !== 'upcoming' && <p className="mr-meta">Scores could not be loaded; box score links still work.</p>}
+      <div ref={scrollRef} className="mr-tw mr-nba-scroll" data-testid="team-schedule-scroll">
         <table className="mr-t" aria-label="Team schedule">
           <thead>
             <tr>
               <th scope="col" className="mr-l"><span className="mr-th-label">DATE</span></th>
               <th scope="col" className="mr-l"><span className="mr-th-label">OPPONENT</span></th>
-              <th scope="col"><span className="mr-th-label">REST DAYS</span></th>
-              <th scope="col"><span className="mr-th-label">SLATE SIZE</span></th>
+              <th scope="col"><span className="mr-th-label">{heads[0]}</span></th>
+              <th scope="col">{heads[1] ? <span className="mr-th-label">{heads[1]}</span> : <span className="sr-only">Box score</span>}</th>
             </tr>
           </thead>
           <tbody>
-            {games.length === 0 && (
-              <tr><td colSpan={4} className="mr-empty">No games left this season.</td></tr>
+            {shown.length === 0 && (
+              <tr><td colSpan={4} className="mr-empty">{empty}</td></tr>
             )}
-            {games.map((game, index) => {
-              const previous = games[index - 1]
-              const showMonth = !previous || monthKey(previous.date) !== monthKey(game.date)
+            {shown.map((row, index) => {
+              const { game, result } = row
+              const previous = shown[index - 1]
+              const showMonth = !previous || monthKey(previous.game.date) !== monthKey(game.date)
               const level = slateLevel(game)
+              const date = formatScheduleDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })
               return (
                 <Fragment key={game.game_id}>
+                  {showToday && index === todayIndex && (
+                    <tr className="mr-nba-today" data-testid="schedule-today">
+                      <th colSpan={4} scope="colgroup" className="mr-l">Today · {formatScheduleDate(easternToday(), { month: 'short', day: 'numeric' })}</th>
+                    </tr>
+                  )}
                   {showMonth && (
                     <tr className="mr-nba-month">
                       <th colSpan={4} scope="colgroup" className="mr-l">{monthLabel(game.date)}</th>
                     </tr>
                   )}
-                  <tr>
-                    <td className="mr-l">{formatScheduleDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
-                    <td className="mr-l"><span className="mr-nba-vs">{game.is_home ? 'vs' : '@'}</span>{game.opponent}</td>
-                    <td className={game.rest_days === 0 ? 'mr-nba-b2b' : undefined}>
-                      {game.rest_days === null ? '—' : game.rest_days === 0 ? '0 · B2B' : `${game.rest_days}d`}
+                  <tr data-row-index={index}>
+                    <td className="mr-l">{date}</td>
+                    <td className="mr-l">
+                      <span className="mr-nba-opp">
+                        <span className="mr-nba-vs">{game.is_home ? 'vs' : '@'}</span>
+                        <img src={nbaTeamLogoUrl(game.opponent_abbreviation, 64)} alt="" width={20} height={20} loading="lazy" className="mr-nba-opp-logo" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
+                        {game.opponent_abbreviation}
+                      </span>
                     </td>
-                    <td className={level ? `mr-nba-slate-${level}` : undefined}>{game.slate_size}</td>
+                    {row.played ? (
+                      <>
+                        <td>
+                          {result ? (
+                            <span className="mr-nba-result">
+                              <span className={result.won ? 'mr-nba-wl mr-nba-w' : 'mr-nba-wl mr-nba-l'}>{result.won ? 'W' : 'L'}</span>
+                              {result.team_score}-{result.opponent_score}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td>
+                          <Link
+                            to={boxScoreHref(game)}
+                            className="mr-nba-boxlink"
+                            aria-label={`Box score: ${result ? `${result.won ? 'Win' : 'Loss'} ${result.team_score}-${result.opponent_score} ` : ''}${game.is_home ? 'vs' : 'at'} ${game.opponent}, ${formatScheduleDate(game.date, { month: 'short', day: 'numeric' })}`}
+                          >
+                            Box<span aria-hidden="true"> ›</span>
+                          </Link>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className={game.rest_days === 0 ? 'mr-nba-b2b' : undefined}>
+                          {game.rest_days === null ? '—' : game.rest_days === 0 ? '0 · B2B' : `${game.rest_days}d`}
+                        </td>
+                        <td className={level ? `mr-nba-slate-${level}` : undefined}>{game.slate_size}</td>
+                      </>
+                    )}
                   </tr>
                 </Fragment>
               )
