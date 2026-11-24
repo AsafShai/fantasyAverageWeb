@@ -676,11 +676,11 @@ export default function BoxScorePanel({
               mineIds={mineIds}
               live={game.status === 'live'}
             />
-            {!hide && <RotationCard game={game} side={side} mineIds={mineIds} />}
           </div>
         </>
       )}
       {!hide && <PlayByPlay game={game} mineIds={mineIds} />}
+      {!hide && !awaitingTip && <RotationCard game={game} side={side} mineIds={mineIds} />}
     </section>
   )
 }

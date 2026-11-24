@@ -73,12 +73,15 @@ describe('RotationCard', () => {
     expect(screen.queryByTestId('rotation-card')).not.toBeInTheDocument()
   })
 
-  it('stays hidden while No spoilers hides the game', () => {
+  it('stays hidden while No spoilers hides the game, and comes after the play-by-play', () => {
     const { unmount } = renderWithProviders(<BoxScorePanel game={game} hideScores onToggleReveal={() => {}} />)
     expect(screen.queryByTestId('rotation-card')).not.toBeInTheDocument()
     unmount()
     renderWithProviders(<BoxScorePanel game={game} hideScores={false} />)
-    expect(screen.getByTestId('rotation-card')).toBeInTheDocument()
+    const card = screen.getByTestId('rotation-card')
+    // Sits after the play-by-play, at the end of the panel.
+    const pbp = screen.getByText('Play-by-play', { exact: true })
+    expect(pbp.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('stacks rows and zooms one quarter on a phone', async () => {
