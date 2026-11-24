@@ -85,11 +85,13 @@ describe('TeamScheduleView', () => {
     expect(screen.getByText('Past Opponent')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true')
     const today = screen.getByTestId('schedule-today')
-    expect(today).toHaveTextContent('Today · Oct 26')
+    expect(today).toHaveTextContent('Today')
+    expect(today).toHaveAttribute('title', 'Today, Oct 26')
     const rows = [...screen.getByRole('table').querySelectorAll('tr[data-row-index]')]
-    // Today's line sits right before tonight's game, the first not yet played.
-    expect(today.compareDocumentPosition(rows[2]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(today.compareDocumentPosition(rows[1]) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+    // Today's line is the top edge of tonight's game, the first not yet played.
+    expect(rows[2]).toContainElement(today)
+    expect(rows[2].className).toContain('border-t-blue-500')
+    expect(rows[1].className).not.toContain('border-t-blue-500')
     expect(await screen.findAllByRole('link', { name: /^Box score:/ })).toHaveLength(2)
     expect(screen.getByText('0 · B2B')).toBeInTheDocument()
   })

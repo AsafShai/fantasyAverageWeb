@@ -49,6 +49,22 @@ function Kpi({ label, value, metric }: { label: string; value: string | number; 
   )
 }
 
+const TODAY_LINE = 'border-t-2 border-t-blue-500 dark:border-t-blue-400'
+
+/** Small pill on today's line, at its left end. */
+function TodayPill() {
+  const today = formatDate(easternToday(), { month: 'short', day: 'numeric' })
+  return (
+    <span
+      data-testid="schedule-today"
+      title={`Today, ${today}`}
+      className="absolute left-2 top-0 z-[1] -translate-y-1/2 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase leading-4 tracking-wide text-white shadow-sm dark:bg-blue-500"
+    >
+      Today
+    </span>
+  )
+}
+
 function restLabel(game: ScheduleGame): string {
   return game.rest_days === null ? '—' : game.rest_days === 0 ? '0 · B2B' : `${game.rest_days}d`
 }
@@ -189,29 +205,25 @@ function ScheduleBody({ team }: { team: ScheduleTeam }) {
               const previous = shown[index - 1]
               const showMonth = !previous || monthKey(previous.game.date) !== monthKey(game.date)
               const href = boxScoreHref(game)
+              // Today's line sits on the top edge of the first game still to play (or its month heading).
+              const marksToday = showToday && index === todayIndex
               return (
                 <Fragment key={game.game_id}>
-                  {showToday && index === todayIndex && (
-                    <tr data-testid="schedule-today">
-                      <td colSpan={4} className="border-y border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold uppercase tracking-wide text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
-                        <span className="inline-flex items-center gap-2">
-                          <span aria-hidden="true" className="h-2 w-2 rounded-full bg-blue-600" />
-                          Today · {formatDate(easternToday(), { month: 'short', day: 'numeric' })}
-                        </span>
-                      </td>
-                    </tr>
-                  )}
                   {showMonth && (
-                    <tr className="bg-blue-50/70 dark:bg-gray-700">
-                      <th colSpan={4} className="px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-blue-800 dark:text-blue-200">{monthLabel(game.date)}</th>
+                    <tr className={`bg-blue-50/70 dark:bg-gray-700 ${marksToday ? TODAY_LINE : ''}`}>
+                      <th colSpan={4} className="relative px-3 py-2 text-left text-xs font-bold uppercase tracking-wide text-blue-800 dark:text-blue-200">
+                        {marksToday && <TodayPill />}
+                        {monthLabel(game.date)}
+                      </th>
                     </tr>
                   )}
                   <tr
                     data-row-index={index}
                     onClick={row.played ? () => navigate(href) : undefined}
-                    className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${row.played ? 'cursor-pointer' : ''}`}
+                    className={`border-b border-gray-100 last:border-0 hover:bg-gray-50 ${row.played ? 'cursor-pointer' : ''} ${marksToday && !showMonth ? TODAY_LINE : ''}`}
                   >
-                    <td className="whitespace-nowrap px-3 py-3 text-left text-gray-700 sm:text-center">{formatDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                    <td className="relative whitespace-nowrap px-3 py-3 text-left text-gray-700 sm:text-center">
+                      {marksToday && !showMonth && <TodayPill />}{formatDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
                     <td className="px-3 py-3 font-medium text-gray-800">
                       <span className="flex items-center justify-center gap-2">
                         <span className="w-5 text-xs font-bold text-gray-400">{game.is_home ? 'vs' : '@'}</span>

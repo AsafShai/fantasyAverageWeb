@@ -181,6 +181,12 @@ function TeamScheduleCard({ teamId }: { teamId: string }) {
   )
 }
 
+/** Small pill on today's line, at its left end. */
+function TodayPill() {
+  const today = formatScheduleDate(easternToday(), { month: 'short', day: 'numeric' })
+  return <span className="mr-nba-today-pill" data-testid="schedule-today" title={`Today, ${today}`}>Today</span>
+}
+
 const SCHEDULE_VIEWS: SegmentedOption<ScheduleView>[] = [
   { value: 'results', label: 'Results' },
   { value: 'upcoming', label: 'Upcoming' },
@@ -251,20 +257,20 @@ function TeamScheduleBody({ team }: { team: ScheduleTeam }) {
               const showMonth = !previous || monthKey(previous.game.date) !== monthKey(game.date)
               const level = slateLevel(game)
               const date = formatScheduleDate(game.date, { weekday: 'short', month: 'short', day: 'numeric' })
+              // Today's line sits on the top edge of the first game still to play (or its month heading).
+              const marksToday = showToday && index === todayIndex
               return (
                 <Fragment key={game.game_id}>
-                  {showToday && index === todayIndex && (
-                    <tr className="mr-nba-today" data-testid="schedule-today">
-                      <th colSpan={4} scope="colgroup" className="mr-l">Today · {formatScheduleDate(easternToday(), { month: 'short', day: 'numeric' })}</th>
-                    </tr>
-                  )}
                   {showMonth && (
-                    <tr className="mr-nba-month">
-                      <th colSpan={4} scope="colgroup" className="mr-l">{monthLabel(game.date)}</th>
+                    <tr className={marksToday ? 'mr-nba-month mr-nba-today-line' : 'mr-nba-month'}>
+                      <th colSpan={4} scope="colgroup" className="mr-l">
+                        {marksToday && <TodayPill />}
+                        {monthLabel(game.date)}
+                      </th>
                     </tr>
                   )}
-                  <tr data-row-index={index}>
-                    <td className="mr-l">{date}</td>
+                  <tr data-row-index={index} className={marksToday && !showMonth ? 'mr-nba-today-line' : undefined}>
+                    <td className="mr-l">{marksToday && !showMonth && <TodayPill />}{date}</td>
                     <td className="mr-l">
                       <span className="mr-nba-opp">
                         <span className="mr-nba-vs">{game.is_home ? 'vs' : '@'}</span>

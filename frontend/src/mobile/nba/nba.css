@@ -46,7 +46,13 @@
 .mr-nba-tile-label { display: inline-flex; align-items: flex-start; gap: 2px; font-size: 10px; font-weight: 700; color: var(--mr-muted); letter-spacing: 0.04em; text-transform: uppercase; line-height: 1.25; }
 .mr-nba-tile-value { font-family: var(--mr-font-num); font-size: 20px; font-weight: 700; }
 .mr-t tr.mr-nba-month th { background: var(--mr-primary-soft); color: var(--mr-primary); font-size: 11px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; padding: 6px 8px; }
-.mr-t tr.mr-nba-today th { background: var(--mr-primary-soft); color: var(--mr-primary); border-top: 2px solid var(--mr-primary-2); font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; padding: 8px; }
+.mr-t tr.mr-nba-today-line > td, .mr-t tr.mr-nba-today-line > th { border-top: 2px solid var(--mr-primary-2); }
+.mr-t tr.mr-nba-today-line > :first-child { position: relative; }
+.mr-nba-today-pill {
+  position: absolute; left: 6px; top: 0; transform: translateY(-50%); z-index: 1;
+  padding: 1px 8px; border-radius: 999px; background: var(--mr-primary-2); color: #FFFFFF;
+  font-size: 10px; font-weight: 800; line-height: 16px; letter-spacing: 0.05em; text-transform: uppercase;
+}
 .mr-nba-opp { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
 .mr-nba-opp .mr-nba-vs { margin-right: 0; }
 .mr-nba-opp-logo { width: 20px; height: 20px; object-fit: contain; flex: none; }

@@ -37,7 +37,8 @@ test('Results opens at the latest game and links to its box score; All opens at 
   await all.click()
   await scroll.scrollIntoViewIfNeeded()
   await expect(page.getByTestId('schedule-today')).toBeInViewport()
-  await expect(page.getByTestId('schedule-today')).toContainText('Today · Nov 24')
+  await expect(page.getByTestId('schedule-today')).toHaveText('Today')
+  await expect(page.getByTestId('schedule-today')).toHaveAttribute('title', 'Today, Nov 24')
   await expect(page.getByRole('link', { name: 'Box score: Loss 108-122 at Chicago Bulls, Nov 23' })).toBeInViewport()
 
   await page.getByRole('link', { name: 'Box score: Loss 108-122 at Chicago Bulls, Nov 23' }).click()
