@@ -3,6 +3,7 @@ import { useGetAllPlayersQuery, useGetTeamsListQuery, useGetNbaTeamsListQuery } 
 import { SEARCHABLE_PAGES } from '../constants/searchablePages'
 import type { Player, Team, NbaTeamInfo } from '../types/api'
 import type { SearchablePage } from '../constants/searchablePages'
+import { nbaTeamLogoUrl, playerHeadshotUrl } from '../utils/nbaImages'
 
 export type SearchResultGroup = 'Players' | 'Fantasy teams' | 'NBA teams' | 'Pages'
 
@@ -10,6 +11,8 @@ export interface SearchResult {
   group: SearchResultGroup
   key: string
   icon: string
+  /** Player headshot or team logo, shown in place of the icon when it loads. */
+  image?: { src: string; kind: 'headshot' | 'logo' }
   title: string
   subtitle: string
   path: string
@@ -57,6 +60,7 @@ function toPlayerResult(player: Player): SearchResult {
     group: 'Players',
     key: `player-${player.player_name}`,
     icon: '🏀',
+    image: player.player_id != null ? { src: playerHeadshotUrl(player.player_id), kind: 'headshot' } : undefined,
     title: player.player_name,
     subtitle: `${player.pro_team} · ${player.positions.join('/')} · ${playerOwnerText(player)}`,
     path: player.player_id != null ? `/player/${player.player_id}` : '',
@@ -80,6 +84,7 @@ function toNbaTeamResult(team: NbaTeamInfo): SearchResult {
     group: 'NBA teams',
     key: `nba-${team.team_id}`,
     icon: '🏟️',
+    image: { src: nbaTeamLogoUrl(team.abbreviation, 64), kind: 'logo' },
     title: team.team_name,
     subtitle: team.abbreviation,
     path: `/nba-teams?team=${encodeURIComponent(team.team_id)}`,

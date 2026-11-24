@@ -7,6 +7,7 @@ import { useGetScheduleQuery } from '../../store/api/fantasyApi'
 import { METRIC_GLOSSARY } from '../../constants/metricGlossary'
 import { formatScheduleDate, monthKey, monthLabel, remainingSchedule, slateLevel } from '../../utils/teamSchedule'
 import { getErrorMessage } from '../../utils/errorMessage'
+import { nbaTeamLogoUrl } from '../../utils/nbaImages'
 import PlayerNameLink from '../../components/PlayerNameLink'
 import InfoTip from '../../components/InfoTip'
 import LoadingSpinner from '../../components/LoadingSpinner'
@@ -31,7 +32,7 @@ export default function MobileNbaTeams({ teams, isLoading, error, selectedTeamId
   const options = useMemo(
     () => [...(teams ?? [])]
       .sort((a, b) => a.team_name.localeCompare(b.team_name))
-      .map((team) => ({ value: team.team_id, label: team.team_name })),
+      .map((team) => ({ value: team.team_id, label: team.team_name, image: nbaTeamLogoUrl(team.abbreviation, 64) })),
     [teams],
   )
 

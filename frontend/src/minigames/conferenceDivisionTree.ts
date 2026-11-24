@@ -61,19 +61,5 @@ export function useConferenceDivisionTree(players: MinigamePlayer[]): Conference
   return useMemo(() => buildConferenceDivisionTree(players), [players])
 }
 
-/** ESPN CDN slug differs from common NBA abbrs for a few franchises. */
-const ESPN_LOGO_SLUG: Record<string, string> = {
-  UTA: 'utah',
-  NOP: 'no',
-  NYK: 'ny',
-  GSW: 'gs',
-  SAS: 'sa',
-  WAS: 'wsh',
-}
-
 /** ESPN team logo by roster abbreviation. */
-export function nbaTeamLogoUrl(abbr: string): string {
-  const key = abbr.trim().toUpperCase()
-  const slug = ESPN_LOGO_SLUG[key] ?? key.toLowerCase()
-  return `https://a.espncdn.com/i/teamlogos/nba/500/${slug}.png`
-}
+export { nbaTeamLogoUrl } from '../utils/nbaImages'
