@@ -141,8 +141,8 @@ describe('PlayerRankings page', () => {
     renderWithProviders(<PlayerRankings />);
     await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument());
 
-    const pg = screen.getByRole('button', { name: 'PG', exact: true });
-    const center = screen.getByRole('button', { name: 'C', exact: true });
+    const pg = screen.getByRole('button', { name: /^PG$/ });
+    const center = screen.getByRole('button', { name: /^C$/ });
     await user.click(pg);
     await user.click(center);
     expect(pg).toHaveAttribute('aria-pressed', 'true');
