@@ -31,6 +31,33 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   )
 }
 
+/** Headshot or logo for a result, falling back to its icon when there is none or it fails to load. */
+function ResultImage({ result }: { result: SearchResult }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const image = result.image
+  if (!image || failed === image.src) {
+    return <span className="flex h-8 w-8 shrink-0 items-center justify-center text-sm" aria-hidden="true">{result.icon}</span>
+  }
+  const headshot = image.kind === 'headshot'
+  return (
+    <span
+      aria-hidden="true"
+      className={`h-8 w-8 shrink-0 overflow-hidden ${headshot ? 'rounded-full border border-gray-200 bg-gray-100 dark:border-gray-600 dark:bg-gray-700' : ''}`}
+    >
+      <img
+        src={image.src}
+        alt=""
+        width={32}
+        height={32}
+        loading="lazy"
+        decoding="async"
+        onError={() => setFailed(image.src)}
+        className={`h-full w-full ${headshot ? 'object-cover object-top' : 'object-contain'}`}
+      />
+    </span>
+  )
+}
+
 /**
  * One overlay for both desktop (centered, Ctrl/Cmd+K) and mobile (full-screen,
  * opened from the navbar search icon). Layout.tsx owns the open/close state
@@ -165,7 +192,7 @@ const CommandPalette = ({ isOpen, onClose, onNavigate }: CommandPaletteProps) =>
                         result.path ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'
                       } ${isSelected ? 'bg-blue-50 dark:bg-blue-900/40' : ''}`}
                     >
-                      <span className="w-5 shrink-0 text-center text-sm">{result.icon}</span>
+                      <ResultImage result={result} />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
                           <HighlightedText text={result.title} query={query} />
