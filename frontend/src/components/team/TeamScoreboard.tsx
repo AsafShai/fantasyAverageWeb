@@ -6,7 +6,7 @@ import { orderCategories } from '../../utils/statOrder'
 import '../../mobile/team/team.css'
 
 /** League-best is solid blue, top half light blue, bottom third orange. */
-export function categoryTone(points: number, teamCount: number): string {
+function categoryTone(points: number, teamCount: number): string {
   if (points >= teamCount) return 'mr-tm-cat-top'
   const share = points / Math.max(teamCount, 1)
   if (share >= 0.66) return 'mr-tm-cat-high'

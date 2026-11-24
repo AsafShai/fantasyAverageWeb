@@ -11,7 +11,7 @@ test('desktop: Team page keeps every section on one page', async ({ page }) => {
   await expect(page.getByRole('region', { name: 'Team summary' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Shooting and averages' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Roster coverage' })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Roster' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Roster', exact: true })).toBeVisible()
   await expect(page).not.toHaveURL(/tab=/)
 })
 
@@ -44,10 +44,12 @@ test.describe('phone Teams + Team page', () => {
     await page.goto('/team/1')
     const head = page.getByRole('region', { name: 'Team summary' })
     await expect(head.getByRole('heading', { name: /Fantasy One/ })).toBeVisible()
-    await expect(head).toContainText('#1 · 80 pts')
+    await expect(head.locator('.mr-tm-rank')).toHaveText('#1')
+    await expect(head.locator('.mr-tm-points')).toContainText('80')
+    await expect(head.locator('.mr-tm-points')).toContainText('pts')
     await expect(head).toContainText('▼2 since yesterday')
     await expect(head.getByRole('listitem', { name: 'PTS: 1 points' })).toBeVisible()
-    await expect(head.getByRole('link', { name: /View on ESPN/ })).toHaveAttribute('href', 'https://fantasy.espn.com')
+    await expect(head.getByRole('link', { name: 'ESPN' })).toHaveAttribute('href', 'https://fantasy.espn.com')
     await expect(head.getByRole('button', { name: /Share/ })).toBeVisible()
 
     await expect(page.getByRole('radio', { name: 'Team Statistics' })).toHaveAttribute('aria-checked', 'true')
