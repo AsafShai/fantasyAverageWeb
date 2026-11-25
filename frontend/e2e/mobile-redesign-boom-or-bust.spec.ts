@@ -67,6 +67,8 @@ test.describe('phone Boom or Bust', () => {
 
   test('a fantasy team: its lineup control fits the screen', async ({ page }) => {
     await openBob(page)
+    // always there, on All
+    await expect(page.getByRole('radiogroup', { name: 'Lineup' })).toBeVisible()
     await page.getByRole('button', { name: 'Fantasy team: All fantasy teams' }).click()
     await page.getByRole('option', { name: 'HY team' }).click()
     await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(1)')

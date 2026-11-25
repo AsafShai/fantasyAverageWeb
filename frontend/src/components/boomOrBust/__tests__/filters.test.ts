@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SurpriseRow } from '../../../types/api'
-import { applyFilters, filterOptions, filtersLabel, FREE_AGENTS, lineupApplies, NO_FILTERS } from '../filters'
+import { applyFilters, filterOptions, filtersLabel, FREE_AGENTS, NO_FILTERS } from '../filters'
 
 const row = (over: Partial<SurpriseRow>): SurpriseRow => ({
   game_date: '2026-11-24', player_id: 1, player_name: 'Player', team_abbr: 'BOS', opponent_abbr: 'LAL', is_home: true,
@@ -37,10 +37,11 @@ describe('applyFilters', () => {
     expect(ids(applyFilters(rows, { ...NO_FILTERS, fantasyTeam: 'TTP', lineup: 'benched' }))).toEqual([2, 3])
   })
 
-  it('ignores the lineup choice without one fantasy team picked', () => {
-    expect(lineupApplies({ ...NO_FILTERS, lineup: 'started' })).toBe(false)
-    expect(ids(applyFilters(rows, { ...NO_FILTERS, nbaTeam: 'DAL', lineup: 'started' }))).toEqual([2, 3])
-    expect(ids(applyFilters(rows, { fantasyTeam: FREE_AGENTS, nbaTeam: '', lineup: 'started' }))).toEqual([5])
+  it('the lineup works on its own, across every team, and leaves free agents out', () => {
+    expect(ids(applyFilters(rows, { ...NO_FILTERS, lineup: 'started' }))).toEqual([1, 4])
+    expect(ids(applyFilters(rows, { ...NO_FILTERS, lineup: 'benched' }))).toEqual([2, 3])
+    expect(ids(applyFilters(rows, { ...NO_FILTERS, nbaTeam: 'DAL', lineup: 'started' }))).toEqual([])
+    expect(ids(applyFilters(rows, { ...NO_FILTERS, nbaTeam: 'DAL', lineup: 'benched' }))).toEqual([2, 3])
   })
 })
 
@@ -111,6 +112,7 @@ describe('filtersLabel', () => {
     const { fantasyTeams } = filterOptions(rows, NO_FILTERS)
     expect(filtersLabel(NO_FILTERS, fantasyTeams)).toBeNull()
     expect(filtersLabel({ fantasyTeam: 'TTP', nbaTeam: 'BOS', lineup: 'started' }, fantasyTeams)).toBe('Trust the process · started · BOS')
-    expect(filtersLabel({ fantasyTeam: FREE_AGENTS, nbaTeam: '', lineup: 'benched' }, fantasyTeams)).toBe('Free agents')
+    expect(filtersLabel({ fantasyTeam: FREE_AGENTS, nbaTeam: '', lineup: 'all' }, fantasyTeams)).toBe('Free agents')
+    expect(filtersLabel({ ...NO_FILTERS, lineup: 'benched' }, fantasyTeams)).toBe('benched')
   })
 })

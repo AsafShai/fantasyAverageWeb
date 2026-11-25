@@ -248,7 +248,13 @@ describe('Boom or Bust page', () => {
     await screen.findByText('Dor Starter')
     const fantasy = screen.getByLabelText('Fantasy team')
     const nba = screen.getByLabelText('NBA team')
-    expect(screen.queryByRole('group', { name: 'Lineup' })).not.toBeInTheDocument()   // only for one fantasy team
+    // the lineup is always there, on All; on its own it runs across every team and drops free agents
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Started' }))
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
+    expect(screen.queryByText('Free Man')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(3)')
     // every league team is listed, also one with no row that night
     await waitFor(() => expect(screen.getByRole('option', { name: 'Idle Team' })).toBeInTheDocument())
 
@@ -272,9 +278,13 @@ describe('Boom or Bust page', () => {
     expect(screen.getByText('Dor Starter')).toBeInTheDocument()
     expect(screen.queryByText('Dor Bench')).not.toBeInTheDocument()
 
+    // free agents have no lineup spot: picking them goes back to All, and a lineup lets go of them
     fireEvent.change(fantasy, { target: { value: '__free_agents__' } })
     expect(screen.getByText('Free Man')).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Lineup' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Benched' }))
+    expect(fantasy).toHaveValue('')
+    expect(screen.getByText('Dor Bench')).toBeInTheDocument()
   })
 
   it('a one-day custom range is that night, with the score sliders', async () => {

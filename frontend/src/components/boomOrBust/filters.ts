@@ -10,7 +10,7 @@ export interface SurpriseFilters {
   fantasyTeam: string;
   /** NBA team that night, or '' for every team. */
   nbaTeam: string;
-  /** Counts only while one fantasy team is picked. */
+  /** Started or benched leaves free agents out: they have no lineup spot. */
   lineup: LineupFilter;
 }
 
@@ -21,9 +21,13 @@ export interface FilterOption {
   label: string;
 }
 
-/** A lineup spot exists only on a fantasy team. */
-export function lineupApplies(filters: SurpriseFilters): boolean {
+/** One fantasy team is picked, not everyone and not the free agents. */
+function teamPicked(filters: SurpriseFilters): boolean {
   return filters.fantasyTeam !== '' && filters.fantasyTeam !== FREE_AGENTS;
+}
+
+export function anyFilter(filters: SurpriseFilters): boolean {
+  return filters.fantasyTeam !== '' || filters.nbaTeam !== '' || filters.lineup !== 'all';
 }
 
 /** A row's fantasy team as the filter knows it: the team id. A row from a
@@ -41,14 +45,15 @@ function idsByCode(leagueTeams: Team[]): Map<string, string> {
 /** Each row carries the teams of its own night, so a player who moved later
  * still counts for the teams he was on when he played. */
 export function applyFilters(rows: SurpriseRow[], filters: SurpriseFilters, leagueTeams: Team[] = []): SurpriseRow[] {
-  const lineup = lineupApplies(filters) ? filters.lineup : 'all';
-  if (filters.fantasyTeam === '' && filters.nbaTeam === '') return rows;
+  const { lineup } = filters;
+  if (!anyFilter(filters)) return rows;
   const idByCode = idsByCode(leagueTeams);
   return rows.filter((row) => {
     if (filters.nbaTeam !== '' && row.team_abbr !== filters.nbaTeam) return false;
     const team = teamKey(row, idByCode);
-    if (filters.fantasyTeam === FREE_AGENTS) return team == null;
-    if (filters.fantasyTeam !== '' && team !== filters.fantasyTeam) return false;
+    if (filters.fantasyTeam === FREE_AGENTS) {
+      if (team != null) return false;
+    } else if (filters.fantasyTeam !== '' && team !== filters.fantasyTeam) return false;
     if (lineup === 'started') return row.started === true;
     // Bench and IR alike: on the team, not in a spot that counted.
     if (lineup === 'benched') return row.started === false;
@@ -76,7 +81,7 @@ export function filterOptions(
     if (team == null) freeAgents = true;
     else if (!fantasy.has(team)) fantasy.set(team, row.fantasy_team_name || row.fantasy_team || team);
   }
-  if (lineupApplies(filters) && !fantasy.has(filters.fantasyTeam)) fantasy.set(filters.fantasyTeam, filters.fantasyTeam);
+  if (teamPicked(filters) && !fantasy.has(filters.fantasyTeam)) fantasy.set(filters.fantasyTeam, filters.fantasyTeam);
   if (filters.nbaTeam !== '') nba.add(filters.nbaTeam);
   const fantasyTeams = [...fantasy.entries()]
     .map(([value, label]) => ({ value, label }))
@@ -93,8 +98,8 @@ export function filtersLabel(filters: SurpriseFilters, fantasyTeams: FilterOptio
   const parts: string[] = [];
   if (filters.fantasyTeam !== '') {
     parts.push(fantasyTeams.find((team) => team.value === filters.fantasyTeam)?.label ?? filters.fantasyTeam);
-    if (lineupApplies(filters) && filters.lineup !== 'all') parts.push(filters.lineup);
   }
+  if (filters.lineup !== 'all') parts.push(filters.lineup);
   if (filters.nbaTeam !== '') parts.push(filters.nbaTeam);
   return parts.length ? parts.join(' · ') : null;
 }
