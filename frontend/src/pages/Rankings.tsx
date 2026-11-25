@@ -305,7 +305,7 @@ const Rankings = () => {
       : null
 
   const seasonStrip = summary ? (
-    <div className="sticky right-0 flex w-max items-center gap-1.5 normal-case tracking-normal">
+    <div className="flex max-w-full flex-wrap items-center gap-1.5 normal-case tracking-normal">
       <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 py-0.5 pl-0.5 pr-2.5 dark:border-amber-600 dark:bg-amber-950">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-sm dark:bg-amber-800" aria-hidden="true">⚡</span>
         <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">NBA Avg Pace</span>
@@ -411,11 +411,11 @@ const Rankings = () => {
   const offToggle = 'bg-blue-800/50 text-white hover:bg-blue-800/70'
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
-      <div className="card">
+    <div className="mx-auto min-w-0 max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+      <div className="card min-w-0">
         <div className="rounded-t-lg border-b border-blue-800 bg-gradient-to-r from-blue-600 to-blue-700">
-        <div className="flex flex-col gap-2 px-3 py-2">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-col gap-2 px-3 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
             <h2 className="shrink-0 text-base font-bold text-white">
               Team {titleWord} ({modeLabel})
             </h2>
@@ -453,8 +453,8 @@ const Rankings = () => {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="[&_.pr-period-btn]:!border-white/35 [&_.pr-period-btn]:!bg-blue-800/50 [&_.pr-period-btn]:!text-white [&_.pr-period-on]:!border-[#ffffff] [&_.pr-period-on]:!bg-[#ffffff] [&_.pr-period-on]:!text-[#0f172a]">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="min-w-0 max-w-full [&_.pr-period]:max-w-full [&_.pr-period-btn]:!border-white/35 [&_.pr-period-btn]:!bg-blue-800/50 [&_.pr-period-btn]:!text-white [&_.pr-period-on]:!border-[#ffffff] [&_.pr-period-on]:!bg-[#ffffff] [&_.pr-period-on]:!text-[#0f172a]">
               <TimePeriodSelector
                 appearance="plain"
                 popover
@@ -613,7 +613,7 @@ const Rankings = () => {
             </ul>
           </div>
         ) : (
-        <div className="overflow-auto max-h-[70vh]">
+        <div className="max-w-full overflow-auto max-h-[70vh]">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="sticky top-0 z-30 bg-gray-50">
               <tr>
