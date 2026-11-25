@@ -13,7 +13,7 @@ import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import LiveBadge from '../components/live/LiveBadge'
 import type { CustomDateRange, RankingStats, TeamRankChange, TimePeriod } from '../types/api'
-import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
+import { todayIso, getDateNDaysAgo, presetRangeStart, validateDateRange } from '../utils/dateRange'
 import TimePeriodSelector from '../components/TimePeriodSelector'
 import '../mobile/pages/playerRankings/playerRankings.css'
 import { MyTeamMark } from '../components/MyTeamMark'
@@ -114,7 +114,7 @@ const Rankings = () => {
   const { isMyTeam, myTeamId } = useMyTeam()
   const mobile = useMobileRedesign()
   const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
-  const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
+  const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from <= urlState.to
   const [sortBy, setSortBy] = useState<string>(urlState.sort)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlState.order)
   const [mode, setMode] = useState<'averages' | 'totals'>(urlState.mode)
@@ -185,9 +185,18 @@ const Rankings = () => {
     setAppliedDates({ startDate: start, endDate: end })
   }
 
+  const lastNightDate = summary?.data_date || getDateNDaysAgo(1)
+
   const handlePeriod = (period: TimePeriod) => {
     if (period === 'season') {
       clearDates()
+      return
+    }
+    if (period === 'last_night') {
+      setStartDate(lastNightDate)
+      setEndDate(lastNightDate)
+      setDateError('')
+      setAppliedDates({ startDate: lastNightDate, endDate: lastNightDate })
       return
     }
     const days = PERIOD_DAYS[period]
@@ -291,6 +300,7 @@ const Rankings = () => {
 
   const activePeriod: TimePeriod = (() => {
     if (!appliedDates.startDate || !appliedDates.endDate) return 'season'
+    if (appliedDates.startDate === appliedDates.endDate && appliedDates.startDate === lastNightDate) return 'last_night'
     if (appliedDates.endDate === today) {
       const match = (Object.keys(PERIOD_DAYS) as TimePeriod[]).find(
         (key) => appliedDates.startDate === presetRangeStart(PERIOD_DAYS[key]!, summary?.season_start),
@@ -458,6 +468,7 @@ const Rankings = () => {
               <TimePeriodSelector
                 appearance="plain"
                 popover
+                showLastNight
                 value={activePeriod}
                 onChange={handlePeriod}
                 customRange={customRange}

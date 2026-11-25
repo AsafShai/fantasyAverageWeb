@@ -9,7 +9,7 @@ interface TimePeriodSelectorProps {
   customRange?: CustomDateRange | null;
   onCustomRangeChange?: (range: CustomDateRange | null) => void;
   allowCustom?: boolean;
-  /** Player Rankings is the page that ranks a single scored night. */
+  /** A single scored night, between Full Season and Last 7 Days. */
   showLastNight?: boolean;
   /** Plain: no emoji and no light track. Other pages keep the default chips. */
   appearance?: 'default' | 'plain';
