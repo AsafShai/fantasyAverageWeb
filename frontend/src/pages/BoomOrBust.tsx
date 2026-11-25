@@ -8,7 +8,12 @@ import { ShareCardButton } from '../components/share/ShareCardButton';
 import { BoomOrBustShareCard, SHARE_ROWS } from '../components/share/BoomOrBustShareCard';
 import { buildShareMessage } from '../components/share/boomOrBustMessage';
 import { useMobileRedesign } from '../mobile/flag';
-import { Button, Card, Chip, ChipRow } from '../mobile/ui';
+import { Button, Card, Chip, ChipRow, Segmented, SelectSheet } from '../mobile/ui';
+import {
+  applyFilters, filterOptions, filtersLabel, lineupApplies, NO_FILTERS,
+  type FilterOption, type LineupFilter, type SurpriseFilters,
+} from '../components/boomOrBust/filters';
+import '../mobile/pages/playerRankings/playerRankings.css';
 import '../mobile/bob/bob.css';
 
 /** Parse YYYY-MM-DD as a local calendar date (no timezone shift). */
@@ -48,13 +53,14 @@ function isNotFound(error: unknown): boolean {
 }
 
 // 1.7 is already a clearly good/bad night; past 3 almost nobody is left.
-// The server defaults (boom 2.1, bust 2.2: the league wants busts a step rarer)
-// sit in the lower half. The score is ranked onto a
-// symmetric bell curve, so both sides share the range. A stored value outside
-// it (from an older range) is ignored and the default takes over.
+// The page opens on a round 2 either way, the bar the daily recap uses, a
+// little under the server's own verdict (boom 2.1, bust 2.2). The score is
+// ranked onto a symmetric bell curve, so both sides share the range. A stored
+// value outside it (from an older range) is ignored and the default takes over.
 const SLIDER_MIN = 1.7;
 const SLIDER_MAX = 3;
 const SLIDER_STEP = 0.1;
+const DEFAULT_BAR = { good: 2, bad: 2 } as const;
 const SCORE_LABEL = { good: 'boom score ≥', bad: 'bust score ≤ −' } as const;
 // v2: the score's scale changed (Oct 2026), so a value chosen on the old one
 // (still inside the new range, e.g. 1.8) would quietly override the new
@@ -83,8 +89,8 @@ function writeStoredThreshold(kind: 'good' | 'bad', value: number | null): void 
   }
 }
 
-/** Per-viewer threshold: a stored value wins over the server default; Reset clears it. */
-function useThreshold(kind: 'good' | 'bad', serverDefault: number) {
+/** Per-viewer threshold: a stored value wins over the page default; Reset clears it. */
+function useThreshold(kind: 'good' | 'bad', serverDefault: number = DEFAULT_BAR[kind]) {
   const [override, setOverride] = useState<number | null>(() => readStoredThreshold(kind));
   const value = override ?? serverDefault;
   const set = (v: number) => {
@@ -181,10 +187,10 @@ function shownRows(rows: SurpriseRow[], kind: 'good' | 'bad', threshold: number)
 
 function SurpriseCard({
   title, kind, slider, resetKey, shown, showDate = false,
-}: { title: string; kind: 'good' | 'bad'; slider: ReactNode; resetKey: number; shown: SurpriseRow[]; showDate?: boolean }) {
+}: { title: string; kind: 'good' | 'bad'; slider: ReactNode; resetKey: string; shown: SurpriseRow[]; showDate?: boolean }) {
   const [page, setPage] = useState(0);
-  // A new bar starts the card on its first page: a viewer on page 2 who
-  // raises the bar and lowers it again should not land back on page 2.
+  // A new bar or filter starts the card on its first page: a viewer on page 2
+  // who raises the bar and lowers it again should not land back on page 2.
   const [pagedFor, setPagedFor] = useState(resetKey);
   if (resetKey !== pagedFor) {
     setPagedFor(resetKey);
@@ -241,13 +247,87 @@ function SurpriseCard({
   );
 }
 
+const LINEUPS: { value: LineupFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'started', label: 'Started' },
+  { value: 'benched', label: 'Benched' },
+];
+
+/** Who the cards show: one fantasy team, one NBA team, and for a fantasy
+ * team its starters or its bench. Teams are the ones of each night. */
+function TeamFilters({
+  filters, onChange, fantasyTeams, nbaTeams,
+}: {
+  filters: SurpriseFilters; onChange: (next: SurpriseFilters) => void;
+  fantasyTeams: FilterOption[]; nbaTeams: FilterOption[];
+}) {
+  const mobile = useMobileRedesign();
+  const setFantasy = (fantasyTeam: string) => onChange({ ...filters, fantasyTeam, lineup: 'all' });
+  const setNba = (nbaTeam: string) => onChange({ ...filters, nbaTeam });
+  const setLineup = (lineup: LineupFilter) => onChange({ ...filters, lineup });
+  const showLineup = lineupApplies(filters);
+  const active = filters.fantasyTeam !== '' || filters.nbaTeam !== '';
+  if (mobile) {
+    return (
+      <div className="mr-frow">
+        <SelectSheet id="bob-fantasy" label="Fantasy team" value={filters.fantasyTeam} onChange={setFantasy}
+          options={[{ value: '', label: 'All fantasy teams' }, ...fantasyTeams]} />
+        <SelectSheet id="bob-nba" label="NBA team" value={filters.nbaTeam} onChange={setNba}
+          options={[{ value: '', label: 'All NBA teams' }, ...nbaTeams]} />
+        {showLineup && <Segmented size="sm" label="Lineup" options={LINEUPS} value={filters.lineup} onChange={setLineup} />}
+        {active && <Button size="sm" onClick={() => onChange(NO_FILTERS)}>Clear</Button>}
+      </div>
+    );
+  }
+  return (
+    <div className="pr-players">
+      <label className="pr-field">
+        <span className="pr-label">Fantasy team</span>
+        <select className="bob-select" value={filters.fantasyTeam} onChange={(e) => setFantasy(e.target.value)}>
+          <option value="">All fantasy teams</option>
+          {fantasyTeams.map((team) => <option key={team.value} value={team.value}>{team.label}</option>)}
+        </select>
+      </label>
+      <label className="pr-field">
+        <span className="pr-label">NBA team</span>
+        <select className="bob-select" value={filters.nbaTeam} onChange={(e) => setNba(e.target.value)}>
+          <option value="">All NBA teams</option>
+          {nbaTeams.map((team) => <option key={team.value} value={team.value}>{team.label}</option>)}
+        </select>
+      </label>
+      {showLineup && (
+        <div className="pr-block">
+          <span className="pr-label">Lineup</span>
+          <div className="pr-period" role="group" aria-label="Lineup">
+            {LINEUPS.map((option) => (
+              <button key={option.value} type="button" className={`pr-period-btn${filters.lineup === option.value ? ' pr-period-on' : ''}`}
+                aria-pressed={filters.lineup === option.value} onClick={() => setLineup(option.value)}>
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {active && <button type="button" className="pr-reset" onClick={() => onChange(NO_FILTERS)}>Clear filters</button>}
+    </div>
+  );
+}
+
+interface FilterProps {
+  filters: SurpriseFilters;
+  /** What is filtered, for the share card; null with no filter on. */
+  filtered: string | null;
+}
+
+const filterKey = (filters: SurpriseFilters) => `${filters.fantasyTeam}|${filters.nbaTeam}|${filters.lineup}`;
+
 const shareUrl = () => `${window.location.origin}/boom-or-bust`;
 
-function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boolean }) {
-  const good = useThreshold('good', night.thresholds.good);
-  const bad = useThreshold('bad', night.thresholds.bad);
-  const booms = useMemo(() => shownRows(night.good, 'good', good.value), [night, good.value]);
-  const busts = useMemo(() => shownRows(night.bad, 'bad', bad.value), [night, bad.value]);
+function NightBody({ night, isLatest, filters, filtered }: { night: NightSurprises; isLatest: boolean } & FilterProps) {
+  const good = useThreshold('good');
+  const bad = useThreshold('bad');
+  const booms = useMemo(() => shownRows(applyFilters(night.good, filters), 'good', good.value), [night, filters, good.value]);
+  const busts = useMemo(() => shownRows(applyFilters(night.bad, filters), 'bad', bad.value), [night, filters, bad.value]);
   const dateLabel = fmtDay(night.game_date, false);
   const shareText = useMemo(
     () => buildShareMessage(dateLabel, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), shareUrl()),
@@ -263,7 +343,7 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
             <BoomOrBustShareCard
               dark={dark}
               kicker={isLatest ? 'last night' : dateLabel}
-              subtitle={`${fmtDay(night.game_date, true)} · ${night.games} game${night.games === 1 ? '' : 's'}`}
+              subtitle={`${fmtDay(night.game_date, true)} · ${night.games} game${night.games === 1 ? '' : 's'}${filtered ? ` · ${filtered}` : ''}`}
               booms={booms}
               busts={busts}
               rules={{ good: `${SCORE_LABEL.good} ${good.value.toFixed(1)}`, bad: `${SCORE_LABEL.bad}${bad.value.toFixed(1)}` }}
@@ -272,8 +352,8 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
         />
       </div>
       <div className="space-y-6">
-        <SurpriseCard title="💥 Booms" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={good.value} shown={booms} />
-        <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={bad.value} shown={busts} />
+        <SurpriseCard title="💥 Booms" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={`${good.value}|${filterKey(filters)}`} shown={booms} />
+        <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={`${bad.value}|${filterKey(filters)}`} shown={busts} />
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Scores compare each player with his own history and with what the model expected for his minutes.
@@ -288,13 +368,13 @@ function NightBody({ night, isLatest }: { night: NightSurprises; isLatest: boole
  * same score bar as a single night, with the same sliders (and the same
  * remembered values). The server sends every player-night past the sliders'
  * lowest point, so moving a slider filters in place, like a night. */
-function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker: string }) {
+function PeriodBody({ start, end, kicker, filters, filtered }: { start: string; end: string; kicker: string } & FilterProps) {
   const { data, isFetching, error } = useGetSurprisesForPeriodQuery({ start, end, minScore: SLIDER_MIN });
   const period: PeriodSurprises | undefined = data && data.start === start && data.end === end ? data : undefined;
-  const good = useThreshold('good', period?.thresholds.good ?? 2.1);
-  const bad = useThreshold('bad', period?.thresholds.bad ?? 2.2);
-  const booms = useMemo(() => (period ? shownRows(period.good, 'good', good.value) : []), [period, good.value]);
-  const busts = useMemo(() => (period ? shownRows(period.bad, 'bad', bad.value) : []), [period, bad.value]);
+  const good = useThreshold('good');
+  const bad = useThreshold('bad');
+  const booms = useMemo(() => (period ? shownRows(applyFilters(period.good, filters), 'good', good.value) : []), [period, filters, good.value]);
+  const busts = useMemo(() => (period ? shownRows(applyFilters(period.bad, filters), 'bad', bad.value) : []), [period, filters, bad.value]);
   const label = fmtRange(start, end);
   const shareText = useMemo(
     () => buildShareMessage(label, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), shareUrl()),
@@ -324,7 +404,7 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
             <BoomOrBustShareCard
               dark={dark}
               kicker={kicker}
-              subtitle={`${label} · ${period.nights} nights · ${period.games} games`}
+              subtitle={`${label} · ${period.nights} nights · ${period.games} games${filtered ? ` · ${filtered}` : ''}`}
               booms={booms}
               busts={busts}
               rules={{ good: `${SCORE_LABEL.good} ${good.value.toFixed(1)}`, bad: `${SCORE_LABEL.bad}${bad.value.toFixed(1)}` }}
@@ -334,8 +414,8 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
         />
       </div>
       <div className="space-y-6">
-        <SurpriseCard title="💥 Booms" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={good.value} shown={booms} showDate />
-        <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={bad.value} shown={busts} showDate />
+        <SurpriseCard title="💥 Booms" kind="good" slider={<ScoreSlider kind="good" threshold={good} />} resetKey={`${good.value}|${filterKey(filters)}`} shown={booms} showDate />
+        <SurpriseCard title="💩 Busts" kind="bad" slider={<ScoreSlider kind="bad" threshold={bad} />} resetKey={`${bad.value}|${filterKey(filters)}`} shown={busts} showDate />
       </div>
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Every performance between {label} with a score past the bar, the same bar as a single night. A player with
@@ -347,12 +427,14 @@ function PeriodBody({ start, end, kicker }: { start: string; end: string; kicker
 }
 
 type Preset = 'night' | '7d' | '30d' | 'season' | 'custom';
-const PRESETS: { id: Preset; label: string; kicker: string }[] = [
-  { id: 'night', label: 'Last night', kicker: 'last night' },
-  { id: '7d', label: 'Last 7 days', kicker: 'last 7 days' },
-  { id: '30d', label: 'Last 30 days', kicker: 'last 30 days' },
-  { id: 'season', label: 'Season', kicker: 'season so far' },
-  { id: 'custom', label: 'Custom', kicker: 'custom period' },
+// Named, marked and ordered like the Player Rankings period chips; this page
+// opens on Last night.
+const PRESETS: { id: Preset; label: string; emoji: string; kicker: string }[] = [
+  { id: 'season', label: 'Full Season', emoji: '📅', kicker: 'season so far' },
+  { id: 'night', label: 'Last night', emoji: '🌙', kicker: 'last night' },
+  { id: '7d', label: 'Last 7 Days', emoji: '🔥', kicker: 'last 7 days' },
+  { id: '30d', label: 'Last 30 Days', emoji: '📈', kicker: 'last 30 days' },
+  { id: 'custom', label: 'Custom', emoji: '📆', kicker: 'custom period' },
 ];
 
 /** The first scored night of the season the newest night belongs to (a
@@ -370,6 +452,8 @@ export default function BoomOrBust() {
   const [preset, setPreset] = useState<Preset>('night');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [custom, setCustom] = useState<{ start: string; end: string } | null>(null);
+  // Kept here so a team stays picked while the period changes.
+  const [filters, setFilters] = useState<SurpriseFilters>(NO_FILTERS);
   const { data: dates = [] } = useGetSurpriseDatesQuery();
   const latestDate = dates[0] ?? null;
 
@@ -391,6 +475,20 @@ export default function BoomOrBust() {
   // currentData, not data: data keeps the previous night while the next one
   // loads, and a second ‹ click during that window would pick the same date again.
   const { currentData: night, isLoading, isFetching, error } = nightDate === null ? latest : forDate;
+
+  // The period's rows are the ones PeriodBody asks for: one request, shared.
+  const periodRows = useGetSurprisesForPeriodQuery(
+    { start: range?.start ?? '', end: range?.end ?? '', minScore: SLIDER_MIN },
+    { skip: !isPeriod || !range },
+  ).currentData;
+  const options = useMemo(() => {
+    const source = isPeriod ? periodRows : night;
+    return filterOptions(source ? [...source.good, ...source.bad] : [], filters);
+  }, [isPeriod, periodRows, night, filters]);
+  const filtered = filtersLabel(filters, options.fantasyTeams);
+  const teamFilters = (
+    <TeamFilters filters={filters} onChange={setFilters} fantasyTeams={options.fantasyTeams} nbaTeams={options.nbaTeams} />
+  );
 
   const shownDate = nightDate ?? night?.game_date ?? null;
   const idx = shownDate ? dates.indexOf(shownDate) : -1;
@@ -418,16 +516,11 @@ export default function BoomOrBust() {
   };
 
   const navBtn = 'px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed';
-  const chip = (active: boolean) =>
-    `px-3 py-1 text-sm rounded-full border ${active
-      ? 'bg-blue-600 border-blue-600 text-white'
-      : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`;
-  const dateInput = 'px-2 py-1 text-sm rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200';
 
   let body;
   if (isPeriod && range) {
     const kicker = PRESETS.find((p) => p.id === preset)?.kicker ?? 'period';
-    body = <PeriodBody key={`${range.start}_${range.end}`} start={range.start} end={range.end} kicker={kicker} />;
+    body = <PeriodBody key={`${range.start}_${range.end}`} start={range.start} end={range.end} kicker={kicker} filters={filters} filtered={filtered} />;
   } else if (isLoading || (isFetching && !night)) {
     body = <LoadingSpinner />;
   } else if (error && isNotFound(error)) {
@@ -439,7 +532,7 @@ export default function BoomOrBust() {
   } else if (error || !night) {
     body = <ErrorMessage message="Failed to load last night's surprises." />;
   } else {
-    body = <NightBody key={night.game_date} night={night} isLatest={night.game_date === latestDate} />;
+    body = <NightBody key={night.game_date} night={night} isLatest={night.game_date === latestDate} filters={filters} filtered={filtered} />;
   }
 
   let subtitle = 'Surprises and disappointments of the last NBA night.';
@@ -464,7 +557,7 @@ export default function BoomOrBust() {
           <>
             <ChipRow label="Period">
               {PRESETS.map((p) => (
-                <Chip key={p.id} selected={preset === p.id} onClick={() => pick(p.id)}>{p.label}</Chip>
+                <Chip key={p.id} selected={preset === p.id} onClick={() => pick(p.id)}>{p.emoji} {p.label}</Chip>
               ))}
             </ChipRow>
             {preset === 'custom' && custom && (
@@ -478,6 +571,7 @@ export default function BoomOrBust() {
                   onChange={(e) => setCustomEnd('end', e.target.value)} />
               </div>
             )}
+            {teamFilters}
           </>
         )}
         {night && noGamesRun && preset === 'night' && selectedDate === null && (
@@ -509,24 +603,33 @@ export default function BoomOrBust() {
       </div>
 
       {dates.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Period">
-          {PRESETS.map((p) => (
-            <button key={p.id} type="button" className={chip(preset === p.id)} aria-pressed={preset === p.id} onClick={() => pick(p.id)}>
-              {p.label}
-            </button>
-          ))}
-          {preset === 'custom' && custom && (
-            <span className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-              <input type="date" aria-label="From" className={dateInput} value={custom.start}
-                min={dates[dates.length - 1]} max={latestDate ?? undefined}
-                onChange={(e) => setCustomEnd('start', e.target.value)} />
-              –
-              <input type="date" aria-label="To" className={dateInput} value={custom.end}
-                min={dates[dates.length - 1]} max={latestDate ?? undefined}
-                onChange={(e) => setCustomEnd('end', e.target.value)} />
-            </span>
-          )}
-        </div>
+        <section className="pr-filters mr-root" aria-label="Boom or Bust filters">
+          <div className="pr-block">
+            <span className="pr-label">Period</span>
+            <div className="pr-period-line">
+              <div className="pr-period" role="group" aria-label="Period">
+                {PRESETS.map((p) => (
+                  <button key={p.id} type="button" className={`pr-period-btn${preset === p.id ? ' pr-period-on' : ''}`} aria-pressed={preset === p.id} onClick={() => pick(p.id)}>
+                    <span aria-hidden="true">{p.emoji}</span>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+              {preset === 'custom' && custom && (
+                <span className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  <input type="date" aria-label="From" className="bob-select" value={custom.start}
+                    min={dates[dates.length - 1]} max={latestDate ?? undefined}
+                    onChange={(e) => setCustomEnd('start', e.target.value)} />
+                  –
+                  <input type="date" aria-label="To" className="bob-select" value={custom.end}
+                    min={dates[dates.length - 1]} max={latestDate ?? undefined}
+                    onChange={(e) => setCustomEnd('end', e.target.value)} />
+                </span>
+              )}
+            </div>
+          </div>
+          {teamFilters}
+        </section>
       )}
 
       {night && noGamesRun && preset === 'night' && selectedDate === null && (
