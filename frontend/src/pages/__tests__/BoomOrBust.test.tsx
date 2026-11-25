@@ -253,7 +253,7 @@ describe('Boom or Bust page', () => {
     fireEvent.change(fantasy, { target: { value: 'DOR' } })
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
     expect(screen.getByText('💩 Busts')).toHaveTextContent('(0)')
-    expect(screen.getByRole('button', { name: 'All', exact: true })).toHaveAttribute('aria-pressed', 'true')   // default: all
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')   // default: all
     fireEvent.click(screen.getByRole('button', { name: 'Benched' }))
     expect(screen.getByText('Dor Bench')).toBeInTheDocument()
     expect(screen.queryByText('Dor Starter')).not.toBeInTheDocument()
