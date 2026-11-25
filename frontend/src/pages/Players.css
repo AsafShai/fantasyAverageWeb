@@ -1,8 +1,11 @@
 .players-page {
-  padding: 20px;
-  max-width: 1400px;
+  padding: 16px;
+  max-width: 1536px;
   margin: 0 auto;
   overflow-x: hidden;
+  background: var(--mr-page);
+  color: var(--mr-text);
+  min-height: 100%;
 }
 
 .filter-toggle {
@@ -21,7 +24,51 @@
 }
 
 .players-page h1 {
-  margin-bottom: 20px;
+  margin: 0 0 20px;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--mr-text);
+}
+
+.pr-stat {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+}
+.pl-select {
+  height: 34px;
+  min-width: 148px;
+  max-width: 240px;
+  padding: 0 8px;
+  border: 1px solid var(--mr-border);
+  border-radius: 10px;
+  background: var(--mr-card);
+  color: var(--mr-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.pr-filters .pl-value { width: 88px; }
+.pl-add {
+  align-self: flex-end;
+  min-height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 10px;
+  background: var(--mr-primary-2);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pl-add:disabled { opacity: 0.45; cursor: not-allowed; }
+.pl-add:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.pl-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dark .pr-filters select.pl-select,
+.dark .pr-filters input.pl-value {
+  background-color: var(--mr-card) !important;
+  color: var(--mr-text) !important;
+  border-color: var(--mr-border) !important;
 }
 
 .loading, .error {
@@ -242,29 +289,31 @@
 }
 
 .table-container {
-  max-height: 600px;
-  overflow-x: auto;
-  overflow-y: auto;
+  max-height: 70vh;
+  overflow: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid var(--mr-border);
+  border-radius: 12px;
+  background: var(--mr-card);
+  box-shadow: none;
 }
 
 .player-table {
   width: 100%;
   border-collapse: collapse;
-  background: #fff;
+  background: var(--mr-card);
+  color: var(--mr-text);
   font-size: 14px;
 }
 
 .player-table th {
-  background: #f5f5f5;
-  padding: 12px 8px;
+  background: var(--mr-table-head);
+  color: var(--mr-muted);
+  padding: 10px 8px;
   text-align: left;
+  font-size: 12px;
   font-weight: 600;
-  border-bottom: 2px solid #ddd;
+  border-bottom: 1px solid var(--mr-border);
   cursor: pointer;
   user-select: none;
   position: sticky;
@@ -278,7 +327,7 @@
 }
 
 .player-table th.week-day:hover {
-  background: #f5f5f5;
+  background: var(--mr-table-head);
 }
 
 .player-table th.week-day.week-games {
@@ -286,18 +335,19 @@
 }
 
 .player-table th.week-day.week-games:hover {
-  background: #e8e8e8;
+  background: var(--mr-sunken);
 }
 
 .player-table th.week-day.week-day-selected,
 .player-table th.week-day.week-day-selected:hover,
 .player-table td.week-day-selected {
-  background: #dbeafe;
+  background: var(--mr-primary-soft);
 }
 
 .player-table td {
   padding: 10px 8px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid var(--mr-divider);
+  color: var(--mr-text);
 }
 
 /* Pin the Name column so it stays visible while scrolling horizontally
@@ -308,17 +358,18 @@
   position: sticky;
   left: 0;
   z-index: 11;
-  background: #fff;
-  border-right: 1px solid #ddd;
+  background: var(--mr-card);
+  border-right: 1px solid var(--mr-border);
 }
 
 .player-table th:first-child {
   z-index: 12;
-  background: #f5f5f5;
+  background: var(--mr-table-head);
 }
 
-.player-table tbody tr:hover {
-  background: #f9f9f9;
+.player-table tbody tr:hover td,
+.player-table tbody tr:hover td:first-child {
+  background: var(--mr-sunken);
 }
 
 .status-badge {
@@ -345,109 +396,6 @@
   color: #f57f17;
 }
 
-:where(.dark, .dark *) .players-page h1 {
-  color: #f1f5f9;
-}
-
 :where(.dark, .dark *) .loading {
-  color: #94a3b8;
-}
-
-:where(.dark, .dark *) .filter-panel {
-  background: #1e293b;
-  border-color: #374151;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .search-input {
-  background: #0f172a;
-  border-color: #374151;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .search-input::placeholder {
-  color: #64748b;
-}
-
-:where(.dark, .dark *) .team-select {
-  background: #0f172a;
-  border-color: #374151;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .stat-filter-builder select,
-:where(.dark, .dark *) .stat-filter-builder input {
-  background: #0f172a;
-  border-color: #374151;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .filter-chip {
-  background: #1e3a5f;
-  color: #bfdbfe;
-}
-
-:where(.dark, .dark *) .filter-chip button {
-  color: #94a3b8;
-}
-
-:where(.dark, .dark *) .filter-chip button:hover {
-  color: #f1f5f9;
-}
-
-:where(.dark, .dark *) .results-count {
-  color: #94a3b8;
-}
-
-:where(.dark, .dark *) .table-container {
-  background: #1e293b;
-  border-color: #374151;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
-}
-
-:where(.dark, .dark *) .player-table {
-  background: #1e293b;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .player-table th {
-  background: #0f172a;
-  border-bottom-color: #374151;
-  color: #e2e8f0;
-}
-
-:where(.dark, .dark *) .player-table th:hover {
-  background: #1e293b;
-}
-
-:where(.dark, .dark *) .player-table th.week-day:hover {
-  background: #0f172a;
-}
-
-:where(.dark, .dark *) .player-table th.week-day.week-games:hover {
-  background: #1e293b;
-}
-
-:where(.dark, .dark *) .player-table th.week-day.week-day-selected,
-:where(.dark, .dark *) .player-table th.week-day.week-day-selected:hover,
-:where(.dark, .dark *) .player-table td.week-day-selected {
-  background: #1e3a5f;
-}
-
-:where(.dark, .dark *) .player-table td {
-  border-bottom-color: #1f2937;
-}
-
-:where(.dark, .dark *) .player-table th:first-child,
-:where(.dark, .dark *) .player-table td:first-child {
-  background: #1e293b;
-  border-right-color: #374151;
-}
-
-:where(.dark, .dark *) .player-table th:first-child {
-  background: #0f172a;
-}
-
-:where(.dark, .dark *) .player-table tbody tr:hover {
-  background: #1e3a5f;
+  color: var(--mr-muted);
 }
