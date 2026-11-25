@@ -29,8 +29,8 @@ async def get_rankings(
         if (start_date is None) != (end_date is None):
             raise HTTPException(status_code=422, detail="Both start_date and end_date must be provided together")
         if start_date is not None and end_date is not None:
-            if start_date >= end_date:
-                raise HTTPException(status_code=422, detail="start_date must be before end_date")
+            if start_date > end_date:
+                raise HTTPException(status_code=422, detail="start_date must not be after end_date")
             if start_date < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start_date cannot be before season start ({settings.season_start})")
             if end_date > latest_client_date():
