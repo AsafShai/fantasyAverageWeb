@@ -150,6 +150,25 @@ async def _init_connection(conn: asyncpg.Connection) -> None:
     )
 
 
+# Neon scales the compute to zero after 5 idle minutes and bills the time it is
+# awake, so each first use after a quiet stretch costs at least 5 minutes of
+# compute. Logging those uses (the line carries the request path or job name)
+# shows which pages and jobs keep the database awake.
+DB_WAKE_IDLE_S = 300.0
+_last_db_use: Optional[float] = None
+
+
+async def _log_db_wake(conn: asyncpg.Connection) -> None:
+    """asyncpg pool ``setup`` hook: runs on every acquire, in the caller's
+    context, so the log line names the request or job that woke the DB."""
+    global _last_db_use
+    now = time.monotonic()
+    if _last_db_use is None or now - _last_db_use >= DB_WAKE_IDLE_S:
+        idle = "first use" if _last_db_use is None else f"idle {int(now - _last_db_use)}s"
+        logger.info(f"DB wake: {idle}")
+    _last_db_use = now
+
+
 class DBService:
     _instance = None
     # None until probed once. Lets this code run against a database where
@@ -174,6 +193,7 @@ class DBService:
                     min_size=1,
                     max_size=5,
                     init=_init_connection,
+                    setup=_log_db_wake,
                 )
             except Exception as e:
                 logger.error(f"Failed to create DB connection pool: {type(e).__name__}: {e}")

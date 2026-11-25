@@ -774,3 +774,40 @@ async def test_surprise_write_without_night_only_upserts(db_service, monkeypatch
     monkeypatch.setattr(db_service, "_get_pool", AsyncMock(return_value=FakePool(conn)))
     assert await db_service.insert_model_surprise_rows([("g", 1, date(2026, 1, 15)) + (None,) * 24])
     conn.execute.assert_not_awaited()
+
+
+class TestDbWakeLog:
+    """The pool's setup hook logs the first DB use after 5 idle minutes, so the
+    logs show which request or job woke the scale-to-zero database."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh(self, monkeypatch):
+        import app.services.db_service as module
+        monkeypatch.setattr(module, "_last_db_use", None)
+        self.module = module
+
+    @pytest.mark.asyncio
+    async def test_logs_first_use_and_after_idle_only(self, monkeypatch, caplog):
+        import logging
+        clock = [1000.0]
+        monkeypatch.setattr(self.module.time, "monotonic", lambda: clock[0])
+        with caplog.at_level(logging.INFO, logger="app.services.db_service"):
+            await self.module._log_db_wake(None)                  # first use
+            clock[0] += 60
+            await self.module._log_db_wake(None)                  # still awake
+            clock[0] += self.module.DB_WAKE_IDLE_S
+            await self.module._log_db_wake(None)                  # idle 300s
+        wakes = [r.getMessage() for r in caplog.records if "DB wake" in r.getMessage()]
+        assert wakes == ["DB wake: first use", "DB wake: idle 300s"]
+
+    @pytest.mark.asyncio
+    async def test_pool_is_created_with_the_hook(self, monkeypatch):
+        from unittest.mock import AsyncMock
+        from app.services.db_service import DBService
+        create = AsyncMock(return_value=object())
+        monkeypatch.setattr(self.module.asyncpg, "create_pool", create)
+        monkeypatch.setattr(self.module.settings, "database_url", "postgresql://x")
+        svc = DBService()
+        monkeypatch.setattr(svc, "_pool", None)
+        await svc._get_pool()
+        assert create.await_args.kwargs["setup"] is self.module._log_db_wake
