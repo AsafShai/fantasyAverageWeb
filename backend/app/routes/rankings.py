@@ -22,6 +22,7 @@ async def get_rankings(
     start_date: Optional[date] = Query(None, description="Start date for date range filter"),
     end_date: Optional[date] = Query(None, description="End date for date range filter"),
     settled: bool = Query(False, description="Date range stays on stored snapshots, ignoring a live slate"),
+    played_only: bool = Query(False, description="Date range ranks only the teams that played in it"),
 ):
     """Get league rankings with optional sorting and date range filtering"""
     try:
@@ -41,6 +42,7 @@ async def get_rankings(
             start_date=start_date,
             end_date=end_date,
             settled=settled,
+            played_only=played_only,
         )
     except HTTPException:
         raise

@@ -10,6 +10,11 @@ interface DailyRecapShareCardProps {
   /** Site theme when the menu opened. The poster has one look and ignores it. */
   dark: boolean
   subtitle: string
+  /** Small line under the date: games that night, and teams that played
+   * when some did not. */
+  note?: string
+  /** Some teams had no games and are out of the night's ranking. */
+  teamsLeftOut?: boolean
   recap: DailyRecap
   /** `@font-face` rules for the poster's typefaces (recapFonts.ts). Without
    * them the card falls back to the system's condensed faces. */
@@ -291,7 +296,7 @@ function SurprisePanel({ dir, side }: { dir: 'up' | 'down'; side: RecapSurpriseS
   )
 }
 
-function ReportHead({ subtitle }: { subtitle: string }) {
+function ReportHead({ subtitle, note }: { subtitle: string; note?: string }) {
   return (
     <header className="drc-head">
       <div className="drc-headline">
@@ -299,6 +304,7 @@ function ReportHead({ subtitle }: { subtitle: string }) {
         <div className="drc-brandbox">
           <div className="drc-brand">Fantasy League</div>
           <div className={`drc-date${subtitle.length > 14 ? ' drc-date--long' : ''}`}>{subtitle}</div>
+          {note && <div className="drc-night">{note}</div>}
         </div>
       </div>
       <div className="drc-hazard" aria-hidden="true" />
@@ -307,11 +313,11 @@ function ReportHead({ subtitle }: { subtitle: string }) {
 }
 
 /** One poster: five rows, two sections each. */
-export const DailyRecapShareCard = ({ subtitle, recap, fontCss }: DailyRecapShareCardProps) => {
+export const DailyRecapShareCard = ({ subtitle, note, teamsLeftOut, recap, fontCss }: DailyRecapShareCardProps) => {
   return (
     <div className="share-card share-card--recap">
       {fontCss && <style>{fontCss}</style>}
-      <ReportHead subtitle={subtitle} />
+      <ReportHead subtitle={subtitle} note={note} />
       <section className="drc-duel">
         <TeamHalf side="best" team={recap.best} />
         <TeamHalf side="worst" team={recap.worst} />
@@ -333,7 +339,7 @@ export const DailyRecapShareCard = ({ subtitle, recap, fontCss }: DailyRecapShar
         <SurprisePanel dir="down" side={recap.bust} />
       </section>
       <footer className="drc-foot">
-        <span>Averages, rankings, last 1 day</span>
+        <span>{teamsLeftOut ? 'Averages, rankings, last 1 day, teams that played' : 'Averages, rankings, last 1 day'}</span>
         <span>Lines, boom and bust from last night</span>
       </footer>
     </div>

@@ -349,6 +349,21 @@ export function recapNightLabel(
   }
 }
 
+/** Small line under the date: how many NBA games the night had, and how many
+ * fantasy teams played when some sat the night out. Those teams are left out
+ * of the night's ranking, so the line says who the points are shared among. */
+export function recapNightNote(
+  games?: number | null,
+  teamsPlayed?: number | null,
+  leagueTeams?: number | null,
+): { note: string | null; teamsLeftOut: boolean } {
+  const parts: string[] = []
+  if (games != null && games > 0) parts.push(`${games} ${games === 1 ? 'game' : 'games'}`)
+  const teamsLeftOut = teamsPlayed != null && leagueTeams != null && teamsPlayed > 0 && teamsPlayed < leagueTeams
+  if (teamsLeftOut) parts.push(`${teamsPlayed} of ${leagueTeams} fantasy teams played`)
+  return { note: parts.length ? parts.join(' · ') : null, teamsLeftOut }
+}
+
 export function signedPoints(value: number): string {
   const body = formatPoints(Math.abs(value))
   if (value > 0) return `+${body}`
