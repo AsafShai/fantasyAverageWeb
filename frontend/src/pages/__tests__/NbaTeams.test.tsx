@@ -53,6 +53,11 @@ function requestUrl(input: RequestInfo | URL): string {
   return (input as Request).url;
 }
 
+async function pickTeam(user: ReturnType<typeof userEvent.setup>, name: RegExp) {
+  await user.click(await screen.findByRole('button', { name: /^NBA team:/ }));
+  await user.click(screen.getByRole('option', { name }));
+}
+
 describe('NbaTeams page', () => {
   beforeEach(() => {
     vi.stubGlobal(
@@ -77,15 +82,48 @@ describe('NbaTeams page', () => {
   it('shows team dropdown and select prompt until team chosen', async () => {
     renderWithProviders(<NbaTeams />);
     await waitFor(() => expect(screen.queryByText(/loading\.\.\./i)).not.toBeInTheDocument());
-    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(screen.getByRole('button', { name: /^NBA team:/ })).toHaveAccessibleName('NBA team: none selected');
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('lists teams with their logos and picks one from the keyboard', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('depthchart')) return jsonResponse(depthChart);
+        if (url.includes('/nba-teams/')) {
+          return jsonResponse([...nbaTeams, { team_id: '20', abbreviation: 'PHL', team_name: '76ers' }]);
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(<NbaTeams />);
+    const button = await screen.findByRole('button', { name: /^NBA team:/ });
+    await user.click(button);
+    const list = screen.getByRole('listbox', { name: 'NBA teams' });
+    const options = within(list).getAllByRole('option');
+    expect(options.map(o => o.textContent)).toEqual(['76ersPHL', 'LakersLAL']);
+    // ESPN names the 76ers' logo "phi", not "phl".
+    expect(options[0].querySelector('img')).toHaveAttribute('src', expect.stringContaining('/teamlogos/nba/500/phi.png'));
+    expect(options[1].querySelector('img')).toHaveAttribute('src', expect.stringContaining('/teamlogos/nba/500/lal.png'));
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(button).toHaveAccessibleName('NBA team: Lakers');
+    expect(button).toHaveFocus();
+    expect(button.querySelector('img')).toHaveAttribute('src', expect.stringContaining('lal.png'));
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+    await user.click(button);
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
   it('selecting team renders depth chart and player names', async () => {
     const user = userEvent.setup();
     renderWithProviders(<NbaTeams />);
-    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
-    await user.selectOptions(screen.getByRole('combobox'), '13');
+    await pickTeam(user, /lakers/i);
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByText('Point Guard')).toBeInTheDocument();
@@ -112,8 +150,7 @@ describe('NbaTeams page', () => {
       }),
     );
     renderWithProviders(<NbaTeams />);
-    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
-    await user.selectOptions(screen.getByRole('combobox'), '13');
+    await pickTeam(user, /lakers/i);
     const table = await screen.findByRole('table');
     const healthy = within(table).getByText('Healthy').closest('div')!;
     const hurt = within(table).getByText('Hurt').closest('div')!;
@@ -127,8 +164,7 @@ describe('NbaTeams page', () => {
   it('excluding Out status removes Out players', async () => {
     const user = userEvent.setup();
     renderWithProviders(<NbaTeams />);
-    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
-    await user.selectOptions(screen.getByRole('combobox'), '13');
+    await pickTeam(user, /lakers/i);
     await waitFor(() => expect(screen.getByText('Hurt')).toBeInTheDocument());
     await user.click(screen.getByRole('checkbox', { name: /^out$/i }));
     expect(screen.queryByText('Hurt')).not.toBeInTheDocument();
@@ -138,8 +174,7 @@ describe('NbaTeams page', () => {
   it('remove duplicates keeps dup only in higher priority position', async () => {
     const user = userEvent.setup();
     renderWithProviders(<NbaTeams />);
-    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
-    await user.selectOptions(screen.getByRole('combobox'), '13');
+    await pickTeam(user, /lakers/i);
     await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
     await user.click(screen.getByRole('checkbox', { name: /duplicates/i }));
     const table = screen.getByRole('table');
@@ -170,12 +205,11 @@ describe('NbaTeams page', () => {
       }),
     );
     renderWithProviders(<NbaTeams />);
-    await waitFor(() => expect(screen.getByRole('option', { name: /lakers/i })).toBeInTheDocument());
-    await user.selectOptions(screen.getByRole('combobox'), '13');
+    await pickTeam(user, /lakers/i);
     await waitFor(() => expect(screen.getByText('Hurt')).toBeInTheDocument());
     await user.click(screen.getByRole('checkbox', { name: /^out$/i }));
     expect(screen.queryByText('Hurt')).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByRole('combobox'), '14');
+    await pickTeam(user, /celtics/i);
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 2, name: /celtics/i })).toBeInTheDocument(),
     );
@@ -214,7 +248,7 @@ describe('NbaTeams page', () => {
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 2, name: /celtics/i })).toBeInTheDocument(),
     );
-    expect(screen.getByRole('combobox')).toHaveValue('14');
+    expect(screen.getByRole('button', { name: /^NBA team:/ })).toHaveAccessibleName('NBA team: Celtics');
   });
 
   it('loading teams shows spinner', () => {

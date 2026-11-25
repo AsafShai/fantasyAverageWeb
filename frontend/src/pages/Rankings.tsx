@@ -12,8 +12,10 @@ import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
 import DataDateBadge from '../components/DataDateBadge'
 import LiveBadge from '../components/live/LiveBadge'
-import type { RankingStats, TeamRankChange } from '../types/api'
-import { todayIso, presetRangeStart, validateDateRange } from '../utils/dateRange'
+import type { CustomDateRange, RankingStats, TeamRankChange, TimePeriod } from '../types/api'
+import { todayIso, getDateNDaysAgo, presetRangeStart, validateDateRange } from '../utils/dateRange'
+import TimePeriodSelector from '../components/TimePeriodSelector'
+import '../mobile/pages/playerRankings/playerRankings.css'
 import { MyTeamMark } from '../components/MyTeamMark'
 import { useMyTeam } from '../context/MyTeamContext'
 import { TEAM_NAME_BOX_CLASS, TEAM_NAME_CELL_CLASS, wrapFriendlyName } from '../utils/wrapName'
@@ -102,20 +104,17 @@ const RANKINGS_URL_SCHEMA = {
   order: enumParam(['asc', 'desc'] as const, 'desc'),
 }
 
-/** Shared size for header segment toggles (Layout / Show / Values): equal columns, same height */
-const RANKINGS_HEADER_TOGGLE_ROW = 'grid grid-cols-2 gap-2 w-full min-w-[min(100%,11rem)] max-w-[22rem]'
+/** Compact header toggles so the table can sit near the top of the page. */
 const RANKINGS_HEADER_TOGGLE_BTN =
-  'flex h-10 min-h-10 w-full items-center justify-center gap-1 rounded-lg px-2 text-center text-sm font-semibold leading-tight transition-colors sm:px-3'
-/** Date pickers: same height and corner radius as toggle buttons; sits in the same grid width as toggles */
-const RANKINGS_DATE_LABEL_ROW = 'flex min-h-5 items-center gap-2'
-const RANKINGS_DATE_INPUT =
-  'box-border h-10 min-h-10 w-full rounded-lg border border-blue-300 bg-white px-2 py-0 text-sm font-semibold leading-none text-gray-800 [color-scheme:light] focus:outline-none focus:ring-2 focus:ring-blue-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 dark:[color-scheme:dark]'
+  'flex h-8 items-center justify-center rounded-md px-2.5 text-xs font-semibold leading-none transition-colors whitespace-nowrap'
+
+const PERIOD_DAYS: Partial<Record<TimePeriod, number>> = { last_7: 7, last_15: 15, last_30: 30 }
 
 const Rankings = () => {
   const { isMyTeam, myTeamId } = useMyTeam()
   const mobile = useMobileRedesign()
   const [urlState, setUrlState] = useUrlState(RANKINGS_URL_SCHEMA)
-  const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from < urlState.to
+  const hasUrlRange = urlState.from !== '' && urlState.to !== '' && urlState.from <= urlState.to
   const [sortBy, setSortBy] = useState<string>(urlState.sort)
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>(urlState.order)
   const [mode, setMode] = useState<'averages' | 'totals'>(urlState.mode)
@@ -175,6 +174,42 @@ const Rankings = () => {
     setEndDate('')
     setDateError('')
     setAppliedDates({})
+  }
+
+  const applyRange = (start: string, end: string) => {
+    const err = validateDateRange(start, end, summary?.season_start, today)
+    setDateError(err ?? '')
+    if (err) return
+    setStartDate(start)
+    setEndDate(end)
+    setAppliedDates({ startDate: start, endDate: end })
+  }
+
+  const lastNightDate = summary?.data_date || getDateNDaysAgo(1)
+
+  const handlePeriod = (period: TimePeriod) => {
+    if (period === 'season') {
+      clearDates()
+      return
+    }
+    if (period === 'last_night') {
+      setStartDate(lastNightDate)
+      setEndDate(lastNightDate)
+      setDateError('')
+      setAppliedDates({ startDate: lastNightDate, endDate: lastNightDate })
+      return
+    }
+    const days = PERIOD_DAYS[period]
+    if (!days) return
+    applyRange(presetRangeStart(days, summary?.season_start), today)
+  }
+
+  const handleCustomRange = (range: CustomDateRange | null) => {
+    if (!range) {
+      clearDates()
+      return
+    }
+    applyRange(range.start, range.end)
   }
 
   const handleSort = (column: string) => {
@@ -263,6 +298,41 @@ const Rankings = () => {
     ? standingsMoversLegend(rankChanges?.live, mode === 'totals')
     : moversLegend(rankChanges?.live)
 
+  const activePeriod: TimePeriod = (() => {
+    if (!appliedDates.startDate || !appliedDates.endDate) return 'season'
+    if (appliedDates.startDate === appliedDates.endDate && appliedDates.startDate === lastNightDate) return 'last_night'
+    if (appliedDates.endDate === today) {
+      const match = (Object.keys(PERIOD_DAYS) as TimePeriod[]).find(
+        (key) => appliedDates.startDate === presetRangeStart(PERIOD_DAYS[key]!, summary?.season_start),
+      )
+      if (match) return match
+    }
+    return 'custom'
+  })()
+  const customRange: CustomDateRange | null =
+    activePeriod === 'custom' && appliedDates.startDate && appliedDates.endDate
+      ? { start: appliedDates.startDate, end: appliedDates.endDate }
+      : null
+
+  const seasonStrip = summary ? (
+    <div className="flex max-w-full flex-wrap items-center gap-1.5 normal-case tracking-normal">
+      <div className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 py-0.5 pl-0.5 pr-2.5 dark:border-amber-600 dark:bg-amber-950">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-200 text-sm dark:bg-amber-800" aria-hidden="true">⚡</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-200">NBA Avg Pace</span>
+        <span className="text-sm font-bold tabular-nums leading-none text-amber-950 dark:text-amber-50">
+          {summary.nba_avg_pace == null ? '—' : summary.nba_avg_pace.toFixed(1)}
+        </span>
+      </div>
+      <div className="flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 py-0.5 pl-0.5 pr-2.5 dark:border-emerald-600 dark:bg-emerald-950">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-200 text-sm dark:bg-emerald-800" aria-hidden="true">📅</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">Days Remaining</span>
+        <span className="text-sm font-bold tabular-nums leading-none text-emerald-950 dark:text-emerald-50">
+          {summary.nba_game_days_left ?? 0}
+        </span>
+      </div>
+    </div>
+  ) : null
+
   const shareButton = (variant: 'onBlue' | 'neutral') => rankings.length > 0 && (
     <ShareCardButton
       title={isStandings ? 'Roto Standings' : 'Roto Rankings'}
@@ -347,267 +417,86 @@ const Rankings = () => {
     )
   }
 
+  const onToggle = 'bg-[#ffffff] text-[#0f172a]'
+  const offToggle = 'bg-blue-800/50 text-white hover:bg-blue-800/70'
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {(data?.data_date || summary?.espn_updated_at || data?.live?.active) && (
-        <div className="mb-4 flex justify-end">
-          {data?.data_date
-            ? <DataDateBadge dataDate={data.data_date} />
-            : <LiveBadge live={data?.live} espnUpdatedAt={summary?.espn_updated_at} />}
-        </div>
-      )}
-      {summary && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:flex sm:justify-center sm:gap-4">
-          <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
-            <div className="flex items-center justify-center w-8 h-8 bg-amber-100 rounded-full sm:w-10 sm:h-10">
-              <span className="text-lg sm:text-xl">⚡</span>
+    <div className="mx-auto min-w-0 max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
+      <div className="card min-w-0">
+        <div className="rounded-t-lg border-b border-blue-800 bg-gradient-to-r from-blue-600 to-blue-700">
+        <div className="flex min-w-0 flex-col gap-2 px-3 py-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <h2 className="shrink-0 text-base font-bold text-white">
+              Team {titleWord} ({modeLabel})
+            </h2>
+            <div className="inline-flex shrink-0 gap-1 rounded-lg bg-blue-800/40 p-0.5" role="group" aria-label="Layout">
+              <button type="button" onClick={() => setLayout('table')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${showTable ? onToggle : offToggle}`}>
+                Full table
+              </button>
+              <button type="button" onClick={() => setLayout('cards')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${showCards ? onToggle : offToggle}`}>
+                Team cards
+              </button>
             </div>
-            <div className="text-center sm:text-left">
-              <div className="text-xs text-gray-500 font-medium">NBA Avg Pace</div>
-              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_avg_pace == null ? '—' : summary.nba_avg_pace.toFixed(1)}</div>
+            <div className="inline-flex shrink-0 gap-1 rounded-lg bg-blue-800/40 p-0.5" role="group" aria-label="Show">
+              <button type="button" onClick={() => setViewMode('standings')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${isStandings ? onToggle : offToggle}`}>
+                Standings
+              </button>
+              <button type="button" onClick={() => setViewMode('rankings')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${!isStandings ? onToggle : offToggle}`}>
+                Rankings
+              </button>
             </div>
-          </div>
-          <div className="flex flex-col items-center gap-2 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow sm:flex-row sm:gap-3 sm:px-5 sm:py-3">
-            <div className="flex items-center justify-center w-8 h-8 bg-emerald-100 rounded-full sm:w-10 sm:h-10">
-              <span className="text-lg sm:text-xl">📅</span>
+            <div className="inline-flex shrink-0 gap-1 rounded-lg bg-blue-800/40 p-0.5" role="group" aria-label="Values">
+              <span className="sr-only">Values</span>
+              <button type="button" onClick={() => setMode('averages')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${mode === 'averages' ? onToggle : offToggle}`}>
+                Averages
+              </button>
+              <button type="button" onClick={() => setMode('totals')} className={`${RANKINGS_HEADER_TOGGLE_BTN} ${mode === 'totals' ? onToggle : offToggle}`}>
+                Totals
+              </button>
             </div>
-            <div className="text-center sm:text-left">
-              <div className="text-xs text-gray-500 font-medium">Days Remaining</div>
-              <div className="text-xl font-bold text-gray-900 sm:text-2xl">{summary.nba_game_days_left ?? 0}</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="card">
-        <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-600 to-blue-700 rounded-t-lg">
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <h2 className="text-2xl font-bold text-white">
-                    Team {titleWord} ({modeLabel})
-                    {isDateRangeActive && (
-                      <span className="ml-2 text-lg font-normal text-blue-100">
-                        – {formatDate(appliedDates.startDate!)} - {formatDate(appliedDates.endDate!)}
-                      </span>
-                    )}
-                  </h2>
-                  {rankings.length > 0 && (
-                    <div className="shrink-0">
-                      {shareButton('onBlue')}
-                    </div>
-                  )}
-                </div>
-                <p className="text-blue-100 mt-1">
-                  {isStandings
-                    ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
-                    : showCards
-                      ? 'Each category shows the team\'s rank within that category. Use Sort below to reorder.'
-                      : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
-                  {hasMoves && ` ${legend}`}
-                </p>
-                {liveNote && (
-                  <p className="mt-2 inline-block rounded-md border border-blue-400 bg-blue-900 px-3 py-1.5 text-sm text-white">{liveNote}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="flex w-full max-w-full flex-col gap-3 sm:flex-row sm:items-end sm:gap-4 md:gap-6">
-              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start" role="group" aria-label="Layout">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Layout</span>
-                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
-                  <button
-                    type="button"
-                    onClick={() => setLayout('table')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      showTable
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Full table
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLayout('cards')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      showCards
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Team cards
-                  </button>
-                </div>
-              </div>
-              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start" role="group" aria-label="Show">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Show</span>
-                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('standings')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      isStandings
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Standings
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setViewMode('rankings')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      !isStandings
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Rankings
-                  </button>
-                </div>
-              </div>
-              <div className="flex min-w-0 w-full flex-1 flex-col gap-1 items-start">
-                <span className="text-xs font-semibold uppercase tracking-wide text-blue-100">Values</span>
-                <div className={`${RANKINGS_HEADER_TOGGLE_ROW} sm:max-w-none`}>
-                  <button
-                    type="button"
-                    onClick={() => setMode('averages')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      mode === 'averages'
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Averages
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode('totals')}
-                    className={`${RANKINGS_HEADER_TOGGLE_BTN} ${
-                      mode === 'totals'
-                        ? 'bg-white text-blue-700'
-                        : 'bg-blue-500 text-white hover:bg-blue-400'
-                    }`}
-                  >
-                    Totals
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex min-w-0 flex-col gap-2 sm:max-w-md sm:flex-1">
-                  <div className={RANKINGS_HEADER_TOGGLE_ROW}>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label className={`${RANKINGS_DATE_LABEL_ROW} text-xs text-blue-100 font-medium`}>
-                        <span>From</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={startDate}
-                        min={summary?.season_start}
-                        max={endDate || today}
-                        onChange={(e) => handleStartDate(e.target.value)}
-                        className={RANKINGS_DATE_INPUT}
-                      />
-                    </div>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <div className={`${RANKINGS_DATE_LABEL_ROW} justify-between`}>
-                        <label htmlFor="rankings-date-to" className="text-xs text-blue-100 font-medium">
-                          To
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleEndDate(today)}
-                          className="text-[11px] font-medium text-blue-100 hover:text-white"
-                        >
-                          Today
-                        </button>
-                      </div>
-                      <input
-                        id="rankings-date-to"
-                        type="date"
-                        value={endDate}
-                        min={startDate || summary?.season_start}
-                        max={today}
-                        onChange={(e) => handleEndDate(e.target.value)}
-                        className={RANKINGS_DATE_INPUT}
-                      />
-                    </div>
-                  </div>
-                  {startDate && endDate && (
-                    <div className={RANKINGS_HEADER_TOGGLE_ROW}>
-                      <button
-                        type="button"
-                        onClick={applyDates}
-                        disabled={!!dateError}
-                        className="flex h-10 min-h-10 w-full items-center justify-center rounded-lg bg-white px-2 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-gray-700 dark:text-blue-300 dark:hover:bg-gray-600 sm:px-3"
-                      >
-                        Apply
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearDates}
-                        className="flex h-10 min-h-10 w-full items-center justify-center rounded-lg border border-blue-300 px-2 text-sm font-semibold text-blue-100 transition-colors hover:border-white hover:text-white sm:px-3"
-                      >
-                        Clear
-                      </button>
-                    </div>
-                  )}
-                </div>
-                {hasMoves && (
-                  <button
-                    type="button"
-                    onClick={() => setShowMoves(!showMoves)}
-                    className="inline-flex shrink-0 items-center gap-1 self-end rounded-md border border-white/45 bg-white/15 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition-colors hover:border-white/70 hover:bg-white/25 active:bg-white/20 sm:self-start"
-                  >
-                    <span aria-hidden="true" className="text-[9px] leading-none">
-                      <span className="text-emerald-200">▲</span>
-                      <span className="text-red-200">▼</span>
-                    </span>
-                    {showMoves ? 'Hide movers' : 'Show movers'}
-                  </button>
-                )}
-              </div>
-              <div className="mt-1 w-full min-w-0 max-w-md">
-                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-blue-200/90">
-                  Quick range
-                </div>
-                <div
-                  className="grid w-full grid-cols-4 gap-1.5 sm:gap-2"
-                  role="group"
-                  aria-label="Quick date range presets"
-                >
-                  {[1, 7, 15, 30].map(days => (
-                    <button
-                      key={days}
-                      type="button"
-                      onClick={() => {
-                        const start = presetRangeStart(days, summary?.season_start);
-                        setStartDate(start);
-                        setEndDate(today);
-                        validateDates(start, today);
-                      }}
-                      title={`Last ${days} day${days === 1 ? '' : 's'} to today`}
-                      aria-label={`Set date range to last ${days} days through today`}
-                      className="flex min-h-9 min-w-0 items-center justify-center rounded-lg border border-white/35 bg-white/10 px-1 py-2 text-center text-[11px] font-semibold leading-none text-white shadow-sm transition-colors hover:border-white/55 hover:bg-white/20 active:bg-white/15 sm:min-h-10 sm:px-2 sm:text-xs"
-                    >
-                      <span className="sm:hidden" aria-hidden="true">
-                        {days}d
-                      </span>
-                      <span className="hidden sm:inline">Last {days}d</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {dateError && (
-                <p className="text-sm text-red-200">{dateError}</p>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {shareButton('onBlue')}
+              {(data?.data_date || summary?.espn_updated_at || data?.live?.active) && (
+                data?.data_date
+                  ? <DataDateBadge dataDate={data.data_date} />
+                  : <LiveBadge live={data?.live} espnUpdatedAt={summary?.espn_updated_at} className="!text-blue-100" />
               )}
             </div>
           </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="min-w-0 max-w-full [&_.pr-period]:max-w-full [&_.pr-period-btn]:!border-white/35 [&_.pr-period-btn]:!bg-blue-800/50 [&_.pr-period-btn]:!text-white [&_.pr-period-on]:!border-[#ffffff] [&_.pr-period-on]:!bg-[#ffffff] [&_.pr-period-on]:!text-[#0f172a]">
+              <TimePeriodSelector
+                appearance="plain"
+                popover
+                showLastNight
+                value={activePeriod}
+                onChange={handlePeriod}
+                customRange={customRange}
+                onCustomRangeChange={handleCustomRange}
+              />
+            </div>
+            {hasMoves && (
+              <button
+                type="button"
+                onClick={() => setShowMoves(!showMoves)}
+                className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-white/45 bg-white/15 px-2.5 text-xs font-semibold text-white hover:bg-white/25"
+              >
+                <span aria-hidden="true" className="text-[9px] leading-none">
+                  <span className="text-emerald-200">▲</span>
+                  <span className="text-red-200">▼</span>
+                </span>
+                {showMoves ? 'Hide movers' : 'Show movers'}
+              </button>
+            )}
+            <div className="ml-auto shrink-0">{seasonStrip}</div>
+          </div>
+        </div>
+          {liveNote && (
+            <p className="px-3 pb-2 text-xs text-blue-100">{liveNote}</p>
+          )}
+          {dateError && (
+            <p className="px-3 pb-2 text-sm text-red-200">{dateError}</p>
+          )}
         </div>
 
         {rangeNote && <LiveRangeNote live={data?.live} text={rangeNote} />}
@@ -735,7 +624,7 @@ const Rankings = () => {
             </ul>
           </div>
         ) : (
-        <div className="overflow-auto max-h-[70vh]">
+        <div className="max-w-full overflow-auto max-h-[70vh]">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="sticky top-0 z-30 bg-gray-50">
               <tr>
@@ -813,6 +702,14 @@ const Rankings = () => {
           </table>
         </div>
         )}
+        <p className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
+          {isStandings
+            ? `${mode === 'averages' ? 'Per-game averages' : 'Season totals'}, exactly as ESPN reports them. Rank and Total still reflect roto scoring.`
+            : showCards
+              ? 'Each category shows the team\'s rank within that category. Use Sort above to reorder.'
+              : 'Each category cell shows the team\'s rank within that category. Click column headers to sort.'}
+          {hasMoves && ` ${legend}`}
+        </p>
       </div>
     </div>
   )

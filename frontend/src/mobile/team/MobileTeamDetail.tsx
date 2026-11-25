@@ -1,9 +1,6 @@
-import { useNavigate } from 'react-router'
-import { useGetRankChangesQuery } from '../../store/api/fantasyApi'
-import { MyTeamMark } from '../../components/MyTeamMark'
 import DataDateBadge from '../../components/DataDateBadge'
 import { ShareCardButton } from '../../components/share/ShareCardButton'
-import { orderCategories } from '../../utils/statOrder'
+import { TeamScoreboard } from '../../components/team/TeamScoreboard'
 import { averagesNote, liveSectionNote, startersNote, tonightGp, tonightPoints } from '../../utils/live'
 import { LiveBadgeMobile } from '../ui/LiveBadgeMobile'
 import { Card, Segmented } from '../ui'
@@ -19,15 +16,6 @@ const TAB_OPTIONS: { value: TeamTab; label: string }[] = [
   { value: 'slots', label: 'Slots & coverage' },
 ]
 
-/** Category points strip: league-best is solid blue, top half light blue, bottom third orange. */
-function catTone(points: number, teamCount: number): string {
-  if (points >= teamCount) return 'mr-tm-cat-top'
-  const share = points / Math.max(teamCount, 1)
-  if (share >= 0.66) return 'mr-tm-cat-high'
-  if (share > 0.33) return 'mr-tm-cat-mid'
-  return 'mr-tm-cat-low'
-}
-
 const pct3 = (v: number) => (v * 100).toFixed(2) + '%'
 
 /**
@@ -37,74 +25,38 @@ const pct3 = (v: number) => (v * 100).toFixed(2) + '%'
  * All state lives in TeamDetail; this only lays it out.
  */
 export default function MobileTeamDetail(p: MobileTeamDetailProps) {
-  const navigate = useNavigate()
   const t = p.team
-  const { data: changes } = useGetRankChangesQuery('averages')
-  const move = changes?.teams.find((c) => c.team_id === t.team.team_id)?.rank_delta
-  const cats = orderCategories(Object.keys(t.category_ranks))
+  const pointsTonight = tonightPoints(t.live, t.tonight)
 
   return (
-    <div className="mr-root mr-page" data-testid="mobile-team-page">
-      <button type="button" className="mr-link mr-tm-back" onClick={() => navigate('/teams')}>
-        ‹ Back to Teams
-      </button>
+    <div className="mr-root mr-page mr-tm-page" data-testid="mobile-team-page">
+      <TeamScoreboard
+        teamId={t.team.team_id}
+        teamName={t.team.team_name}
+        rank={t.ranking_stats.rank}
+        totalPoints={t.ranking_stats.total_points}
+        gp={t.raw_averages.gp}
+        teamCount={p.teamCount}
+        categories={t.category_ranks}
+        espnUrl={t.espn_url}
+        share={<ShareCardButton title={`${t.team.team_name} Report`} renderCard={p.shareCard} />}
+        badge={t.data_date
+          ? <DataDateBadge dataDate={t.data_date} />
+          : <LiveBadgeMobile live={t.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(t.live, 'averages', true)} />}
+        pointsTonight={pointsTonight}
+        pointsDown={(t.tonight?.points ?? 0) < 0}
+        gpTonight={tonightGp(t.live, t.tonight)}
+        playingNote={startersNote(t.live, t.tonight)}
+        liveNote={liveSectionNote(t.live, 'stats')}
+      />
 
-      <Card as="section" aria-label="Team summary">
-        <h1 className="mr-tm-title">
-          {t.team.team_name}
-          <MyTeamMark teamId={t.team.team_id} />
-        </h1>
-        <div className="mr-card-head">
-          <span className="mr-tm-big">
-            #{t.ranking_stats.rank ?? '—'} · {t.ranking_stats.total_points} pts
-          </span>
-          {typeof move === 'number' && (
-            <span
-              className={`mr-tm-move ${move > 0 ? 'mr-up' : move < 0 ? 'mr-down' : 'mr-same'}`}
-              title="Rank change since yesterday (averages)"
-            >
-              {move > 0 ? `▲${move}` : move < 0 ? `▼${-move}` : '–'} since yesterday
-            </span>
-          )}
-        </div>
-        <div className="mr-tm-cats" role="list" aria-label="Category points">
-          {cats.map((c) => (
-            <div
-              key={c}
-              role="listitem"
-              className={`mr-tm-cat ${catTone(t.category_ranks[c], p.teamCount)}`}
-              aria-label={`${c}: ${t.category_ranks[c]} points`}
-            >
-              <span>{c}</span>
-              <b>{t.category_ranks[c]}</b>
-            </div>
-          ))}
-        </div>
-        <div className="mr-tm-meta-row">
-          <span className="mr-meta">Ranking summary (averages) · GP {t.raw_averages.gp}</span>
-          {t.data_date ? <DataDateBadge dataDate={t.data_date} /> : <LiveBadgeMobile live={t.live} espnUpdatedAt={p.espnUpdatedAt} note={averagesNote(t.live, 'averages', true)} />}
-        </div>
-        <div className="mr-tm-actions">
-          <a className="mr-tm-espn" href={t.espn_url} target="_blank" rel="noopener noreferrer">
-            View on ESPN ↗
-          </a>
-          <span className="mr-tm-share">
-            <ShareCardButton title={`${t.team.team_name} Report`} renderCard={p.shareCard} />
-          </span>
-        </div>
-      </Card>
-
-      <Card title="Manager hints" className="mr-hints-card" aria-label="Manager hints">
-        <ManagerHintsTeamSection teamId={t.team.team_id} layout="mobile" teamDetail={t} />
-      </Card>
+      <ManagerHintsTeamSection teamId={t.team.team_id} layout="desktop" teamDetail={t} />
 
       <Segmented label="Team page section" options={TAB_OPTIONS} value={p.tab} onChange={p.onTab} />
 
       {p.tab === 'stats' && (
         <>
           <Card title="Team statistics">
-            {liveSectionNote(t.live, 'stats') && <span className="mr-meta">{liveSectionNote(t.live, 'stats')}</span>}
-            {startersNote(t.live, t.tonight) && <p className="mr-live-note" data-testid="starters-playing-note">{startersNote(t.live, t.tonight)}</p>}
             <div>
               <div className="mr-kv"><span>Overall rank</span><b>#{t.ranking_stats.rank}</b></div>
               <div className="mr-kv">

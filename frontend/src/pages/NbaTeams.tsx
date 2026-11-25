@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import NbaTeamSelect from '../components/NbaTeamSelect';
 import { useSearchParams } from 'react-router';
 import { useGetNbaTeamsListQuery } from '../store/api/fantasyApi';
 import LoadingSpinner from '../components/LoadingSpinner';
@@ -196,18 +197,7 @@ export default function NbaTeams() {
       ) : (
         <>
           <div className="mb-6">
-            <select
-              value={selectedTeamId}
-              onChange={(e) => handleSelectTeam(e.target.value)}
-              className="w-full sm:w-72 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-800 dark:text-gray-100 bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select a team...</option>
-              {[...(teams ?? [])].sort((a, b) => a.team_name.localeCompare(b.team_name)).map((team) => (
-                <option key={team.team_id} value={team.team_id}>
-                  {team.team_name}
-                </option>
-              ))}
-            </select>
+            <NbaTeamSelect teams={teams ?? []} value={selectedTeamId} onChange={handleSelectTeam} />
           </div>
 
           {selectedTeamId && (

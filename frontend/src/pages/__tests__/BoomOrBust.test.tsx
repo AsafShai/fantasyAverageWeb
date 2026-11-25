@@ -66,6 +66,12 @@ const requested = (part: string) =>
     .map(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url))
     .filter((url) => url.includes(part))
 
+const LEAGUE = [
+  { team_id: 1, team_name: "Asaf's Team", abbrev: 'ASA' },
+  { team_id: 4, team_name: 'DORELIT', abbrev: 'DOR' },
+  { team_id: 8, team_name: 'Idle Team', abbrev: 'IDL' },
+]
+
 function stubApi(latest: Response | (() => Response)) {
   vi.stubGlobal(
     'fetch',
@@ -75,6 +81,7 @@ function stubApi(latest: Response | (() => Response)) {
       if (url.includes('/surprises/period')) return Response.json(period)
       if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
+      if (url.endsWith('/teams/')) return Response.json(LEAGUE)
       return new Response('not found', { status: 404 })
     }),
   )
@@ -106,8 +113,8 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
-    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server's own default per side
+    expect(screen.getByText('boom score ≥ 2.0')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.0')).toBeInTheDocument()   // the page's own round 2, not the server's 2.1 and 2.2
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
 
     // (b) while dragging only the label follows; the row appears when the thumb is released
@@ -122,16 +129,16 @@ describe('Boom or Bust page', () => {
     expect(screen.queryByText('Almost Bad')).not.toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBe('1.7')
 
-    // (c) Reset restores the server default and clears the stored value
+    // (c) Reset restores the page default and clears the stored value
     fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
     expect(screen.queryByText('Almost Good')).not.toBeInTheDocument()
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
-    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.0')).toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.v2.goodThreshold')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
   })
 
-  it('a stored threshold wins over the server default on load', async () => {
+  it('a stored threshold wins over the page default on load', async () => {
     localStorage.setItem('boomOrBust.v2.badThreshold', '1.7')
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
@@ -147,8 +154,8 @@ describe('Boom or Bust page', () => {
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await screen.findByText('Good Guy')
-    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()
-    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.0')).toBeInTheDocument()
+    expect(screen.getByText('bust score ≤ −2.0')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reset' })).not.toBeInTheDocument()
     expect(localStorage.getItem('boomOrBust.goodThreshold')).toBeNull()
     expect(localStorage.getItem('boomOrBust.badThreshold')).toBeNull()
@@ -159,7 +166,7 @@ describe('Boom or Bust page', () => {
     stubApi(() => Response.json(night))
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await screen.findByText('Good Guy')
-    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()   // the server default instead
+    expect(screen.getByText('bust score ≤ −2.0')).toBeInTheDocument()   // the page default instead
     const boom = screen.getByLabelText('Surprise threshold')
     const bust = screen.getByLabelText('Disappointment threshold')
     expect(bust).toHaveAttribute('min', '1.7')
@@ -199,14 +206,14 @@ describe('Boom or Bust page', () => {
     renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
     await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
 
-    fireEvent.click(screen.getByRole('button', { name: 'Last 7 days' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Last 7 Days' }))
     await waitFor(() => expect(screen.getByText('Week Star')).toBeInTheDocument())
     expect(requested('/surprises/period').at(-1)).toContain('start=2023-12-30&end=2024-01-05&min_score=1.7')
     expect(screen.getByText('Dec 30, 2023 – Jan 5, 2024')).toBeInTheDocument()
     expect(screen.getByText(/2 nights · 7 games · 100 performances scored/)).toBeInTheDocument()
     expect(screen.getByText('1 performance')).toBeInTheDocument()   // the busts card's footer: a row is one player's game
-    expect(screen.getByText('boom score ≥ 2.1')).toBeInTheDocument()   // the night's bars, not a percentile
-    expect(screen.getByText('bust score ≤ −2.2')).toBeInTheDocument()
+    expect(screen.getByText('boom score ≥ 2.0')).toBeInTheDocument()   // the night's bars, not a percentile
+    expect(screen.getByText('bust score ≤ −2.0')).toBeInTheDocument()
     expect(screen.getAllByText('Jan 4').length).toBeGreaterThan(0)   // the Date column
     expect(screen.queryByLabelText('Previous night')).not.toBeInTheDocument()   // ‹ › are for single nights
 
@@ -224,6 +231,60 @@ describe('Boom or Bust page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Last night' }))
     await waitFor(() => expect(screen.getByText('Good Guy')).toBeInTheDocument())
     expect(screen.getByLabelText('Surprise threshold')).toBeInTheDocument()
+  })
+
+  it('filters by the fantasy team and NBA team of the night, and a team by its lineup', async () => {
+    const teams: NightSurprises = {
+      ...night,
+      good: [
+        row({ player_id: 51, player_name: 'Dor Starter', fantasy_team: 'DOR', fantasy_team_name: 'DORELIT', team_abbr: 'BOS', started: true }),
+        row({ player_id: 52, player_name: 'Dor Bench', fantasy_team: 'DOR', fantasy_team_name: 'DORELIT', team_abbr: 'DAL', started: false, lineup_slot: 'BE' }),
+        row({ player_id: 53, player_name: 'Free Man', fantasy_team: null, fantasy_team_name: null, team_abbr: 'DAL', started: null, lineup_slot: null }),
+      ],
+      bad: [row({ player_id: 54, player_name: 'Asa Dud', score: -2.4, verdict: 'bad', fantasy_team: 'ASA', fantasy_team_name: "Asaf's Team", team_abbr: 'BOS' })],
+    }
+    stubApi(() => Response.json(teams))
+    renderWithProviders(<BoomOrBust />, { route: '/boom-or-bust' })
+    await screen.findByText('Dor Starter')
+    const fantasy = screen.getByLabelText('Fantasy team')
+    const nba = screen.getByLabelText('NBA team')
+    // the lineup is always there, on All; on its own it runs across every team and drops free agents
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Started' }))
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(1)')
+    expect(screen.queryByText('Free Man')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(3)')
+    // every league team is listed, also one with no row that night
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Idle Team' })).toBeInTheDocument())
+
+    fireEvent.change(nba, { target: { value: 'DAL' } })
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
+    expect(screen.queryByText('Dor Starter')).not.toBeInTheDocument()
+    expect(screen.queryByText('Asa Dud')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(3)')
+
+    // the value is the team id, so a new code or name does not lose the pick
+    expect(screen.getByRole('option', { name: 'DORELIT' })).toHaveValue('4')
+    fireEvent.change(fantasy, { target: { value: '4' } })
+    expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
+    expect(screen.getByText('💩 Busts')).toHaveTextContent('(0)')
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')   // default: all
+    fireEvent.click(screen.getByRole('button', { name: 'Benched' }))
+    expect(screen.getByText('Dor Bench')).toBeInTheDocument()
+    expect(screen.queryByText('Dor Starter')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Started' }))
+    expect(screen.getByText('Dor Starter')).toBeInTheDocument()
+    expect(screen.queryByText('Dor Bench')).not.toBeInTheDocument()
+
+    // free agents have no lineup spot: picking them goes back to All, and a lineup lets go of them
+    fireEvent.change(fantasy, { target: { value: '__free_agents__' } })
+    expect(screen.getByText('Free Man')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Benched' }))
+    expect(fantasy).toHaveValue('')
+    expect(screen.getByText('Dor Bench')).toBeInTheDocument()
   })
 
   it('a one-day custom range is that night, with the score sliders', async () => {

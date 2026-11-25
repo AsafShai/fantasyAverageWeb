@@ -5,6 +5,7 @@ import PlayerNameLink from '../PlayerNameLink'
 import type { PregamePlayer } from './pregameRoster'
 import { fouledOut, lineupGroups } from './lineupGroups'
 import { PlayByPlay } from './PlayByPlay'
+import RotationCard from './RotationCard'
 import { countdownLabel, gameClockLabel, localClock } from './tipTime'
 import { nameCellWrapClass, wrapFriendlyName } from '../../utils/wrapName'
 import { signedZ } from './linesOfTheNightFormat'
@@ -679,6 +680,7 @@ export default function BoxScorePanel({
         </>
       )}
       {!hide && <PlayByPlay game={game} mineIds={mineIds} />}
+      {!hide && !awaitingTip && <RotationCard game={game} side={side} mineIds={mineIds} />}
     </section>
   )
 }

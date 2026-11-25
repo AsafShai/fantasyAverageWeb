@@ -4,6 +4,12 @@ import { useSheetHistory } from './useSheetHistory'
 export interface SelectOption<T extends string> {
   value: T
   label: string
+  /** Optional small image before the label (a team logo). */
+  image?: string
+}
+
+function OptionImage({ src }: { src: string }) {
+  return <img className="mr-opt-img" src={src} alt="" width={24} height={24} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.style.visibility = 'hidden' }} />
 }
 
 interface SelectSheetProps<T extends string> {
@@ -36,6 +42,7 @@ export function SelectSheet<T extends string>({ label, options, value, onChange,
         aria-label={`${label}: ${display ?? current?.label ?? ''}`}
         onClick={sheet.show}
       >
+        {display === undefined && current?.image && <OptionImage key={current.image} src={current.image} />}
         <span className="mr-select-label">{display ?? current?.label ?? label}</span>
         <span className="mr-caret" aria-hidden="true">▾</span>
       </button>
@@ -52,12 +59,13 @@ export function SelectSheet<T extends string>({ label, options, value, onChange,
               type="button"
               role="option"
               aria-selected={o.value === value}
-              className="mr-opt"
+              className={o.image ? 'mr-opt mr-opt-has-img' : 'mr-opt'}
               onClick={() => {
                 onChange(o.value)
                 sheet.hide()
               }}
             >
+              {o.image && <OptionImage src={o.image} />}
               {o.label}
             </button>
           ))}

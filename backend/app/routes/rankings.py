@@ -22,14 +22,15 @@ async def get_rankings(
     start_date: Optional[date] = Query(None, description="Start date for date range filter"),
     end_date: Optional[date] = Query(None, description="End date for date range filter"),
     settled: bool = Query(False, description="Date range stays on stored snapshots, ignoring a live slate"),
+    played_only: bool = Query(False, description="Date range ranks only the teams that played in it"),
 ):
     """Get league rankings with optional sorting and date range filtering"""
     try:
         if (start_date is None) != (end_date is None):
             raise HTTPException(status_code=422, detail="Both start_date and end_date must be provided together")
         if start_date is not None and end_date is not None:
-            if start_date >= end_date:
-                raise HTTPException(status_code=422, detail="start_date must be before end_date")
+            if start_date > end_date:
+                raise HTTPException(status_code=422, detail="start_date must not be after end_date")
             if start_date < settings.season_start:
                 raise HTTPException(status_code=422, detail=f"start_date cannot be before season start ({settings.season_start})")
             if end_date > latest_client_date():
@@ -41,6 +42,7 @@ async def get_rankings(
             start_date=start_date,
             end_date=end_date,
             settled=settled,
+            played_only=played_only,
         )
     except HTTPException:
         raise

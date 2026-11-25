@@ -646,3 +646,47 @@ class TestDynamicCategoriesDateRange:
         delta = real_ranking_service._compute_delta(pl.DataFrame(rows_end), None)
 
         assert delta.to_pandas().set_index('team_id').loc[1]['TO'] == 120.0
+
+
+class TestPlayedOnlyDateRange(TestDynamicCategoriesDateRange):
+    """The daily recap's night: a team with no games is left out of the
+    ranking, so the others are scored among themselves."""
+
+    def _night(self, service):
+        self._stub_range(
+            service,
+            [self._snapshot(1, "Alpha", 1000, 120, 40, 400, 850),
+             self._snapshot(2, "Beta", 950, 60, 40, 380, 800),
+             self._snapshot(3, "Idle", 500, 30, 20, 200, 400)],
+            [self._snapshot(1, "Alpha", 400, 60, 20, 160, 340),
+             self._snapshot(2, "Beta", 300, 20, 20, 150, 320),
+             self._snapshot(3, "Idle", 500, 30, 20, 200, 400)],
+        )
+
+    @pytest.mark.asyncio
+    async def test_idle_team_is_left_out(self, real_ranking_service):
+        from datetime import date as _date
+        self._night(real_ranking_service)
+
+        result = await real_ranking_service.get_league_rankings(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31), played_only=True,
+        )
+
+        assert {row.team.team_name for row in result.averages_rankings} == {"Alpha", "Beta"}
+        assert {row.team.team_name for row in result.totals_rankings} == {"Alpha", "Beta"}
+        assert result.league_team_count == 3
+        # Two teams score 1 and 2 in a category, never 2 and 3.
+        points = sorted(row.category_ranks['PTS'] for row in result.averages_rankings)
+        assert points == [1, 2]
+
+    @pytest.mark.asyncio
+    async def test_default_keeps_every_team(self, real_ranking_service):
+        from datetime import date as _date
+        self._night(real_ranking_service)
+
+        result = await real_ranking_service.get_league_rankings(
+            start_date=_date(2026, 1, 1), end_date=_date(2026, 1, 31),
+        )
+
+        assert len(result.averages_rankings) == 3
+        assert result.league_team_count == 3

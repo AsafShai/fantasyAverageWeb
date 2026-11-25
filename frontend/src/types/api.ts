@@ -49,6 +49,9 @@ export interface LeagueRankings {
   date_range_end?: string;
   actual_start_date?: string;
   actual_end_date?: string;
+  /** Date range only: every team in the league, including any a
+   * played-only request left out of the rankings. */
+  league_team_count?: number;
 }
 
 export interface ShotChartStats {
@@ -344,6 +347,19 @@ export interface ScheduleGame {
   rest_days: number | null;
   slate_size: number;
   high_volume: boolean;
+}
+
+/** A finished game with its final score, from /nba-teams/{id}/results. */
+export interface TeamGameResult {
+  game_id: string;
+  /** NBA (Eastern) calendar day. */
+  date: string;
+  is_home: boolean;
+  opponent_id: number;
+  opponent_abbreviation: string;
+  team_score: number;
+  opponent_score: number;
+  won: boolean;
 }
 
 export interface ScheduleTeam {
@@ -760,6 +776,8 @@ export interface SurpriseRow {
   /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
    * whether that slot counted (false = bench / IR; null when unknown). */
   fantasy_team: string | null
+  /** The fantasy team's id that night, the stable key (a code or a name can change). */
+  fantasy_team_id?: number | null
   /** The team's current full name ("Trust the process"); the code when unknown. */
   fantasy_team_name?: string | null
   lineup_slot: string | null

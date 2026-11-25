@@ -47,6 +47,7 @@
 }
 /* A range, or a second date for the lines, does not fit the tag at full size. */
 .drc-date--long { font-size: 20px; line-height: 1.2; white-space: normal; text-align: right; }
+.drc-night { font-size: 17px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--drc-mute); white-space: nowrap; margin-top: -2px; }
 .drc-hazard { height: 14px; background: repeating-linear-gradient(115deg, rgba(11, 17, 32, 0) 0, rgba(11, 17, 32, 0) 14px, var(--drc-ink) 14px, var(--drc-ink) 28px), linear-gradient(90deg, var(--drc-brand-stops)); }
 
 .drc-kicker { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; white-space: nowrap; }

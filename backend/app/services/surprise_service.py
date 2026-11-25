@@ -528,6 +528,7 @@ class SurpriseService:
             "verdict": r["verdict"],
             "reasons": reasons,
             # fantasy context that night: None = free agent
+            "fantasy_team_id": team_id,
             "fantasy_team": abbrevs.get(team_id, str(team_id)) if team_id is not None else None,
             # The team's current full name, by the same season-scoped id.
             "fantasy_team_name": ((names or {}).get(team_id) or abbrevs.get(team_id, str(team_id))) if team_id is not None else None,

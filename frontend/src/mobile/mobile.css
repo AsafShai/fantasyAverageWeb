@@ -55,7 +55,10 @@
   color: var(--mr-text-2);
 }
 .mr-seg.mr-sm .mr-seg-btn { min-height: 32px; font-size: 12px; }
-.mr-seg-btn[aria-checked="true"] { background: var(--mr-seg-on); color: var(--mr-text); box-shadow: var(--mr-shadow-on); }
+.mr-seg-btn[aria-checked="true"],
+.mr-seg-btn[aria-pressed="true"] { background: var(--mr-seg-on); color: var(--mr-text); box-shadow: var(--mr-shadow-on); }
+.mr-seg.mr-fit { flex: 0 0 auto; }
+.mr-seg.mr-fit .mr-seg-btn { flex: 0 0 auto; padding: 0 14px; }
 .mr-seg-btn:focus-visible, .mr-chip:focus-visible, .mr-select:focus-visible, .mr-th-btn:focus-visible,
 .mr-step button:focus-visible, .mr-reset:focus-visible, .mr-opt:focus-visible {
   outline: 2px solid var(--mr-primary-2); outline-offset: 1px;
@@ -165,6 +168,9 @@
   display: block; width: 100%; text-align: left; border: none; border-top: 1px solid var(--mr-divider);
   background: none; padding: 12px 6px; font-size: 14px; cursor: pointer; color: var(--mr-text); min-height: 44px;
 }
+.mr-opt.mr-opt-has-img { display: flex; align-items: center; gap: 10px; }
+.mr-opt-img { width: 24px; height: 24px; flex: none; object-fit: contain; }
+.mr-select .mr-opt-img + .mr-select-label { flex: 1; text-align: left; }
 .mr-opt[aria-selected="true"] { color: var(--mr-primary); font-weight: 700; background: var(--mr-row-me); }
 
 /* ── minutes stepper ── */

@@ -4,7 +4,7 @@ import { useWeightDraft } from '../hooks/useWeightDraft'
 import { useGetAllPlayersQuery, useGetLatestMovesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi'
 import { useMyTeam } from '../context/MyTeamContext'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { FantasyTeamFilterChips } from '../components/playerRankings/FantasyTeamFilterChips'
+import { FantasyTeamMenu } from '../components/playerRankings/FantasyTeamMenu'
 import { NbaTeamFilter } from '../components/playerRankings/NbaTeamFilter'
 import { matchesNbaTeam, parseNbaTeams } from '../components/playerRankings/nbaTeams'
 import ErrorMessage from '../components/ErrorMessage'
@@ -19,7 +19,14 @@ import InfoTip from '../components/InfoTip'
 import { METRIC_GLOSSARY, type MetricInfo } from '../constants/metricGlossary'
 import type { TimePeriod, CustomDateRange } from '../types/api'
 import { useMobileRedesign } from '../mobile/flag'
+import { PositionFilter } from '../mobile/ui'
 import PlayerRankingsMobile from '../mobile/pages/playerRankings/PlayerRankingsMobile'
+import '../mobile/pages/playerRankings/playerRankings.css'
+import {
+  matchesFantasyTeam,
+  parseFantasyTeamFilter,
+  type FantasyTeamFilter,
+} from '../mobile/pages/playerRankings/filters'
 import {
   computePlayerRankings,
   getRawValue,
@@ -39,11 +46,16 @@ const DEFAULT_WEIGHTS = Object.fromEntries(DEFAULT_CATEGORIES.map(c => [c, 1])) 
 
 const ALL_POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C']
 
-import {
-  matchesFantasyTeam,
-  parseFantasyTeamFilter,
-  type FantasyTeamFilter,
-} from '../mobile/pages/playerRankings/filters'
+/** The old desktop control stored one position. Keep it when the multi-select has never been saved. */
+function savedPositions(): string[] | undefined {
+  try {
+    if (localStorage.getItem('fw:playerRankings.positions') !== null) return undefined
+    const single = JSON.parse(localStorage.getItem('fw:playerRankings.position') ?? 'null')
+    return typeof single === 'string' && ALL_POSITIONS.includes(single) ? [single] : undefined
+  } catch {
+    return undefined
+  }
+}
 
 /** Short fantasy code. team_id 0 is a free agent or on waivers. */
 function fantasyTeamAbbrev(teamId: number, abbrevById: Map<number, string>): string {
@@ -114,9 +126,8 @@ export default function PlayerRankings() {
   const [displayMode, setDisplayMode] = usePersistedState<'totals' | 'per_game'>('playerRankings.displayMode', 'per_game')
   const [minGp, setMinGp] = usePersistedState('playerRankings.minGp', 0)
   const [minMin, setMinMin] = usePersistedState('playerRankings.minMin', 0)
-  const [position, setPosition] = usePersistedState<string | null>('playerRankings.position', null)
-  // Phone picks several positions; desktop keeps its single select (separate state so each stays as it was).
-  const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [])
+  const [positionsSeed] = useState(savedPositions)
+  const [positionsPicked, setPositionsPicked] = usePersistedState<string[]>('playerRankings.positions', [], positionsSeed)
   const [nbaTeamsRaw, setNbaTeams] = usePersistedState<string[]>('playerRankings.nbaTeams', [])
   const nbaTeams = useMemo(() => parseNbaTeams(nbaTeamsRaw), [nbaTeamsRaw])
   useEffect(() => {
@@ -167,7 +178,6 @@ export default function PlayerRankings() {
     setCustomRange(null)
     setMinGp(0)
     setMinMin(0)
-    setPosition(null)
     setPositionsPicked([])
     setNbaTeams([])
     setFantasyTeam(null)
@@ -179,7 +189,7 @@ export default function PlayerRankings() {
   const isPunted = (cat: RankingCategory) => effectiveWeights[cat] === 0
 
   const recompute = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position: mobile ? null : position, positions: mobile ? positionsPicked : undefined, weights: effectiveWeights }
+    const config: RankingsConfig = { calcMode, minGp, minMin, position: null, positions: positionsPicked, weights: effectiveWeights }
     const next = computePlayerRankings(players, config, categories, reverseCategories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
@@ -213,14 +223,14 @@ export default function PlayerRankings() {
   useEffect(() => {
     if (players.length > 0 && hasCalculated) recompute()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weights, calcMode])
+  }, [weights, calcMode, positionsPicked])
 
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
     const filtered = rankedPlayers.filter(r =>
       r.player.stats.gp >= minGp &&
       (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
-      matchesPositionFilter(r.player.positions, mobile ? null : position, mobile ? positionsPicked : undefined)
+      matchesPositionFilter(r.player.positions, null, positionsPicked)
     )
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
@@ -241,7 +251,7 @@ export default function PlayerRankings() {
       const bVal = getSortVal(b.ranked, sortCol, displayMode)
       return sortAsc ? aVal - bVal : bVal - aVal
     })
-  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, position, positionsPicked, mobile, fantasyTeam, nbaTeams, displayMode, displayLimit, searchQuery])
+  }, [rankedPlayers, sortCol, sortAsc, minGp, minMin, positionsPicked, fantasyTeam, nbaTeams, displayMode, displayLimit, searchQuery])
 
   const handleSort = (col: SortCol) => {
     if (col === sortCol) setSortAsc(a => !a)
@@ -304,108 +314,36 @@ export default function PlayerRankings() {
       <div className="max-w-screen-2xl mx-auto">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-6">Player Rankings</h1>
 
-        <div className="mb-4">
-          <PlayerSearchBox value={search} onChange={setSearch} />
-          {searchQuery && hasCalculated && (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400" aria-live="polite">
-              {sortedPlayers.length === 0
-                ? 'No players match'
-                : `${sortedPlayers.length} ${sortedPlayers.length === 1 ? 'player' : 'players'} found · ranks are overall`}
-              {sortedPlayers.length > 0 && (
-                <>
-                  {' · '}
-                  {/* The filter panel pushes the table off-screen on narrow viewports. */}
-                  <button
-                    type="button"
-                    onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                    className="lg:hidden font-medium text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    View results ↓
-                  </button>
-                </>
+        <section className="pr-filters mr-root" aria-label="Player ranking filters">
+          <div className="pr-rank">
+            <ModeControl label="Calc mode" tone="mr-pr-calc" value={calcMode} onChange={setCalcMode} />
+            <ModeControl label="Display mode" tone="mr-pr-disp" value={displayMode} onChange={setDisplayMode} />
+            <button type="button" className="pr-reset" onClick={handleReset}>Reset</button>
+          </div>
+
+          <div className="pr-block">
+            <span className="pr-label">Period</span>
+            <div className="pr-period-line">
+              <TimePeriodSelector appearance="plain" value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} showLastNight />
+              {playersData?.actual_start && playersData?.actual_end && (
+                <p className="pr-range">
+                  Showing {playersData.actual_start === playersData.actual_end
+                    ? formatShort(playersData.actual_start)
+                    : `${formatShort(playersData.actual_start)} – ${formatShort(playersData.actual_end)}`}
+                </p>
               )}
-            </p>
-          )}
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow p-3 sm:p-4 mb-6 space-y-3 sm:space-y-4">
-
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-4 sm:items-start">
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Calc mode</label>
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
-                {(['totals', 'per_game'] as const).map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setCalcMode(m)}
-                    className={`px-3 py-1.5 ${calcMode === m ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {m === 'totals' ? 'Totals' : 'Per Game'}
-                  </button>
-                ))}
-              </div>
             </div>
+          </div>
 
-            <div className="col-span-2 sm:col-span-1">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Display mode</label>
-              <div className="flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden text-sm">
-                {(['totals', 'per_game'] as const).map(m => (
-                  <button
-                    key={m}
-                    onClick={() => setDisplayMode(m)}
-                    className={`px-3 py-1.5 ${displayMode === m ? 'bg-purple-600 text-white' : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200'}`}
-                  >
-                    {m === 'totals' ? 'Totals' : 'Per Game'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Period</label>
-              <TimePeriodSelector value={period} onChange={setPeriod} customRange={customRange} onCustomRangeChange={setCustomRange} showLastNight />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Min GP</label>
-              <input
-                type="number" min={0} value={minGp}
-                onChange={e => setMinGp(Math.max(0, Number(e.target.value)))}
-                className="w-20 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Min MPG</label>
-              <input
-                type="number" min={0} value={minMin}
-                onChange={e => setMinMin(Math.max(0, Number(e.target.value)))}
-                className="w-24 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">NBA team</label>
+          <div className="pr-players">
+            <PositionFilter options={ALL_POSITIONS} selected={positionsPicked} onChange={setPositionsPicked} />
+            <div className="pr-nba">
+              <span className="pr-label">NBA team</span>
               <NbaTeamFilter selected={nbaTeams} onChange={setNbaTeams} />
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Position</label>
-              <select
-                value={position ?? ''}
-                onChange={e => setPosition(e.target.value || null)}
-                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              >
-                <option value="">All</option>
-                {ALL_POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </div>
-
-            <div className="min-w-0 sm:col-span-2 lg:col-span-3">
-              <span className="mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400">Fantasy team</span>
-              <FantasyTeamFilterChips
-                wrap
-                className="pr-fantasy-team-chips"
+            <div className="pr-fantasy-menu">
+              <span className="pr-label">Fantasy team</span>
+              <FantasyTeamMenu
                 value={fantasyTeam}
                 onChange={setFantasyTeam}
                 teams={teams ?? []}
@@ -413,42 +351,67 @@ export default function PlayerRankings() {
                 isMyTeam={isMyTeam}
               />
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Show</label>
-              <select
-                value={displayLimit ?? ''}
-                onChange={e => setDisplayLimit(e.target.value === '' ? null : Number(e.target.value))}
-                className="px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-sm"
-              >
-                {[50, 100, 150, 200].map(n => <option key={n} value={n}>Top {n}</option>)}
-                <option value="">All</option>
-              </select>
+            <label className="pr-field">
+              <span className="pr-label">Min GP</span>
+              <input
+                type="number"
+                min={0}
+                value={minGp}
+                onChange={e => setMinGp(Math.max(0, Number(e.target.value)))}
+                className="pr-num"
+              />
+            </label>
+            <label className="pr-field">
+              <span className="pr-label">Min MPG</span>
+              <input
+                type="number"
+                min={0}
+                value={minMin}
+                onChange={e => setMinMin(Math.max(0, Number(e.target.value)))}
+                className="pr-num"
+              />
+            </label>
+            <div className="pr-show">
+              <span className="pr-label">Show</span>
+              <div className="mr-seg mr-sm mr-fit pr-show-seg" role="group" aria-label="Show">
+                {[50, 100, 150, 200].map(n => (
+                  <button key={n} type="button" className="mr-seg-btn" aria-pressed={displayLimit === n} onClick={() => setDisplayLimit(n)}>
+                    Top {n}
+                  </button>
+                ))}
+                <button type="button" className="mr-seg-btn" aria-pressed={displayLimit === null} onClick={() => setDisplayLimit(null)}>
+                  All
+                </button>
+              </div>
             </div>
           </div>
 
-          {playersData?.actual_start && playersData?.actual_end && (
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              Showing {playersData.actual_start === playersData.actual_end
-                ? formatShort(playersData.actual_start)
-                : `${formatShort(playersData.actual_start)} – ${formatShort(playersData.actual_end)}`}
-            </p>
-          )}
-
-          <WeightSliders key={sliderResetKey} categories={categories} initialWeights={effectiveWeights} onCommit={setWeights} />
-
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-gray-400 dark:text-gray-500">
-              {players.length} players loaded · Blue = calc mode · Purple = display mode · everything updates live
-            </p>
-            <button
-              onClick={handleReset}
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-semibold rounded-lg transition-colors"
-            >
-              Reset
-            </button>
+          <div className="pr-weights">
+            <WeightSliders key={sliderResetKey} categories={categories} initialWeights={effectiveWeights} onCommit={setWeights} />
           </div>
-        </div>
+          <div className="pr-top-search">
+            <PlayerSearchBox value={search} onChange={setSearch} className="pr-search" />
+            {searchQuery && hasCalculated && (
+              <p className="pr-search-note" aria-live="polite">
+                {sortedPlayers.length === 0
+                  ? 'No players match'
+                  : `${sortedPlayers.length} ${sortedPlayers.length === 1 ? 'player' : 'players'} found · ranks are overall`}
+                {sortedPlayers.length > 0 && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      className="pr-view-results"
+                    >
+                      View results ↓
+                    </button>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        </section>
 
         {period === 'custom' && customRange && (
           <CoverageNotice
@@ -477,7 +440,7 @@ export default function PlayerRankings() {
         )}
 
         {hasCalculated && sortedPlayers.length > 0 && (
-          <div ref={resultsRef} className="scroll-mt-20 bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
+          <div ref={resultsRef} className="pr-rankings scroll-mt-20 bg-white dark:bg-gray-800 rounded-xl shadow overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -499,7 +462,10 @@ export default function PlayerRankings() {
               </thead>
               <tbody>
                 {sortedPlayers.map(({ ranked, rank }) => (
-                  <tr key={`${ranked.player.player_name}-${ranked.player.team_id}`} className="group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr
+                    key={`${ranked.player.player_name}-${ranked.player.team_id}`}
+                    className={`group border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50${ranked.player.team_id !== 0 && isMyTeam(ranked.player.team_id) ? ' mr-me' : ''}`}
+                  >
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-gray-500 dark:text-gray-400 text-center font-mono text-xs">{rank}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 text-center font-semibold text-blue-600 dark:text-blue-400 text-xs sm:text-sm">{fmt(ranked.totalZ)}</td>
                     <td className="px-1.5 sm:px-3 py-1.5 sm:py-2 font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap text-xs sm:text-sm sticky left-0 z-10 bg-white dark:bg-gray-800 group-hover:bg-gray-50 dark:group-hover:bg-gray-700/50 border-r border-gray-200 dark:border-gray-700"><PlayerNameLink name={ranked.player.player_name} playerId={ranked.player.player_id} /></td>
@@ -534,10 +500,46 @@ export default function PlayerRankings() {
   )
 }
 
-function PlayerSearchBox({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+const RANK_MODES = [
+  { value: 'totals', label: 'Totals' },
+  { value: 'per_game', label: 'Per Game' },
+] as const
+
+function ModeControl({
+  label,
+  tone,
+  value,
+  onChange,
+}: {
+  label: string
+  tone: string
+  value: 'totals' | 'per_game'
+  onChange: (mode: 'totals' | 'per_game') => void
+}) {
+  return (
+    <div className="pr-mode">
+      <span className="pr-label">{label}</span>
+      <div className={`mr-seg mr-sm mr-fit ${tone}`}>
+        {RANK_MODES.map(mode => (
+          <button
+            key={mode.value}
+            type="button"
+            className="mr-seg-btn"
+            aria-pressed={value === mode.value}
+            onClick={() => onChange(mode.value)}
+          >
+            {mode.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function PlayerSearchBox({ value, onChange, className = '' }: { value: string; onChange: (value: string) => void; className?: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   return (
-    <div className="relative w-full sm:max-w-md">
+    <div className={`relative w-full sm:max-w-md ${className}`.trim()}>
       <svg
         aria-hidden="true"
         viewBox="0 0 20 20"

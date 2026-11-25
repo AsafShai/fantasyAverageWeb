@@ -119,10 +119,8 @@ export default function SlotUsageTable({
   )
 
   return (
-    <div className={embedded ? 'p-4 sm:p-5 dark:bg-gray-800' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'}>
-      {embedded ? (
-        <h2 className="sr-only">Slot usage</h2>
-      ) : (
+    <div className={embedded ? '' : 'rounded-lg bg-white p-4 shadow sm:p-6 dark:bg-gray-800'}>
+      {embedded ? null : (
         <div className="flex flex-col gap-1 pb-3 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
           <h2 className="text-lg font-bold text-gray-900 sm:text-xl dark:text-gray-50">Slot usage</h2>
           {meta}

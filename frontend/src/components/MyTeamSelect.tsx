@@ -17,11 +17,11 @@ export function MyTeamSelect({
           to={`/team/${myTeam.team_id}`}
           onClick={onNavigate}
           title={myTeam.team_name}
-          className={`truncate text-xs font-semibold text-blue-700 hover:underline dark:text-blue-300 ${
-            fullWidth ? 'min-w-0 flex-1' : 'max-w-[7rem]'
+          className={`text-xs font-semibold text-blue-700 hover:underline dark:text-blue-300 ${
+            fullWidth ? 'min-w-0 flex-1 truncate' : 'whitespace-nowrap'
           }`}
         >
-          {myTeam.team_name}
+          {fullWidth ? myTeam.team_name : 'Go to my team ›'}
         </Link>
       )}
       <select

@@ -27,6 +27,17 @@ class TeamDepthChart(BaseModel):
     positions: list[DepthChartPosition]
 
 
+class TeamGameResult(BaseModel):
+    game_id: str
+    date: str
+    is_home: bool
+    opponent_id: int
+    opponent_abbreviation: str
+    team_score: int
+    opponent_score: int
+    won: bool
+
+
 class NbaTeamInfo(BaseModel):
     team_id: str
     abbreviation: str

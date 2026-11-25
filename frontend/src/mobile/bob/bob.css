@@ -11,3 +11,10 @@
   background: var(--mr-pill-quest-bg); color: var(--mr-pill-quest-fg);
 }
 .mr-bob p.text-xs { font-size: 12px; color: var(--mr-muted); }
+/* Desktop filter card: selects and date fields beside the Player Rankings chips. */
+.bob-select {
+  min-height: 32px; padding: 0 10px; border: 1px solid var(--mr-border); border-radius: 10px;
+  background: var(--mr-card); color: var(--mr-text); font-size: 13px; font-weight: 600; min-width: 10rem;
+}
+.bob-select[type="date"] { min-width: 0; }
+.bob-select:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }

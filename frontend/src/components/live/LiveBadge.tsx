@@ -62,7 +62,7 @@ const LiveBadge = ({ live, espnUpdatedAt, align = 'right', liveDetail, className
       {open && (
         <div
           id={panelId}
-          className={`absolute top-8 z-20 flex w-72 flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3.5 text-left text-gray-900 shadow-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`absolute top-8 z-50 flex w-72 flex-col gap-2 rounded-lg border border-gray-200 bg-white p-3.5 text-left text-gray-900 shadow-xl dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tonight's games</div>
           <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />

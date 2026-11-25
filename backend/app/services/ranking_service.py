@@ -22,14 +22,20 @@ class RankingService:
     async def get_league_rankings(self, sort_by: Optional[str] = None, order: str = "asc",
                                    start_date: Optional[date] = None,
                                    end_date: Optional[date] = None,
-                                   settled: bool = False) -> LeagueRankings:
+                                   settled: bool = False,
+                                   played_only: bool = False) -> LeagueRankings:
         """Get league rankings. If dates provided, compute from DB snapshot deltas.
 
         ``settled`` keeps a date range on stored snapshots. The daily recap uses
         it so a live slate cannot replace the night the nightly job finished.
+
+        ``played_only`` ranks a date range among the teams that played in it.
+        The daily recap uses it so a team with no games that night neither
+        takes last place nor hands the others a point each.
         """
         if start_date is not None and end_date is not None:
-            return await self._get_rankings_for_range(start_date, end_date, sort_by, order, settled=settled)
+            return await self._get_rankings_for_range(start_date, end_date, sort_by, order,
+                                                      settled=settled, played_only=played_only)
         # None while LIVE_STANDINGS_ENABLED is off: the response is then built
         # exactly as before and carries no ``live`` block. The block is attached
         # after the memo because it changes with the clock, not with the frames.
@@ -126,9 +132,14 @@ class RankingService:
 
     async def _get_rankings_for_range(self, start_date: date, end_date: date,
                                        sort_by: Optional[str], order: str,
-                                       settled: bool = False) -> LeagueRankings:
+                                       settled: bool = False,
+                                       played_only: bool = False) -> LeagueRankings:
         actual_start_date, actual_end_date, settled_delta, progress_delta, live_state = \
             await self.range_deltas(start_date, end_date, settled=settled)
+        league_team_count = settled_delta.height
+        if played_only:
+            settled_delta = self._played(settled_delta)
+            progress_delta = self._played(progress_delta)
 
         categories = await self.data_provider.get_ranking_categories()
         reverse_categories = await self.data_provider.get_reverse_categories()
@@ -158,7 +169,15 @@ class RankingService:
             actual_end_date=actual_end_date,
             categories=categories,
         )
+        response.league_team_count = league_team_count
         return with_live(response, live_state)
+
+    @staticmethod
+    def _played(delta_df: pl.DataFrame) -> pl.DataFrame:
+        """The teams with at least one game in the range."""
+        if 'GP' not in delta_df.columns:
+            return delta_df
+        return delta_df.filter(pl.col('GP') > 0)
 
     def _compute_delta(self, end_df: pl.DataFrame, start_df: Optional[pl.DataFrame]) -> pl.DataFrame:
         """Compute per-team delta between end and start snapshots.

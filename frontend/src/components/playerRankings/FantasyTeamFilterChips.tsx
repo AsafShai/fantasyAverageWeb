@@ -20,10 +20,9 @@ interface Props {
   className?: string
 }
 
-/** All · Rostered · FA/Waivers (exclusive) + multi-select per fantasy team. */
-export function FantasyTeamFilterChips({ value, onChange, teams, myTeamId, isMyTeam, wrap = false, className = '' }: Props) {
+function PresetChips({ value, onChange }: { value: FantasyTeamFilter; onChange: (next: FantasyTeamFilter) => void }) {
   return (
-    <ChipRow label="Fantasy team" wrap={wrap} className={className}>
+    <>
       <Chip selected={fantasyTeamPresetSelected(value, null)} onClick={() => onChange(setFantasyTeamPreset(value, null))}>
         All
       </Chip>
@@ -33,6 +32,13 @@ export function FantasyTeamFilterChips({ value, onChange, teams, myTeamId, isMyT
       <Chip selected={fantasyTeamPresetSelected(value, 0)} onClick={() => onChange(setFantasyTeamPreset(value, 0))}>
         Free Agents / Waivers
       </Chip>
+    </>
+  )
+}
+
+function TeamChips({ value, onChange, teams, myTeamId, isMyTeam }: Omit<Props, 'wrap' | 'className'>) {
+  return (
+    <>
       {leadWithMyTeam(teams, myTeamId).map((t) => (
         <Chip
           key={t.team_id}
@@ -42,6 +48,16 @@ export function FantasyTeamFilterChips({ value, onChange, teams, myTeamId, isMyT
           {fantasyTeamOptionLabel(t.team_name, isMyTeam(t.team_id))}
         </Chip>
       ))}
+    </>
+  )
+}
+
+/** All · Rostered · FA/Waivers (exclusive) + multi-select per fantasy team. */
+export function FantasyTeamFilterChips({ value, onChange, teams, myTeamId, isMyTeam, wrap = false, className = '' }: Props) {
+  return (
+    <ChipRow label="Fantasy team" wrap={wrap} className={className}>
+      <PresetChips value={value} onChange={onChange} />
+      <TeamChips value={value} onChange={onChange} teams={teams} myTeamId={myTeamId} isMyTeam={isMyTeam} />
     </ChipRow>
   )
 }

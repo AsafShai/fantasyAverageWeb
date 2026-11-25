@@ -1,10 +1,10 @@
-import { useParams, useNavigate } from 'react-router'
+import { useParams } from 'react-router'
 import { useState, useMemo, useEffect } from 'react'
 import React from 'react'
 import { usePersistedState } from '../hooks/usePersistedState'
 import { useUrlState, enumParam, isoDateParam, stringParam } from '../hooks/useUrlState'
 import { useGetTeamDetailQuery, useGetLeagueSummaryQuery, useGetMatchupsTodayQuery, useGetScheduleQuery, useGetTeamRosterDayQuery } from '../store/api/fantasyApi'
-import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey, Player } from '../types/api'
+import type { TimePeriod, PlayerMatchup, CustomDateRange, PlayerStatKey } from '../types/api'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 import { getErrorMessage } from '../utils/errorMessage'
@@ -19,7 +19,6 @@ import InjuryBadge from '../components/InjuryBadge'
 import SlotUsageTable from '../components/SlotUsageTable'
 import PlayerNameLink from '../components/PlayerNameLink'
 import RosterCoverage from '../components/RosterCoverage'
-import { MyTeamMark } from '../components/MyTeamMark'
 import { nameCellWrapClass, wrapFriendlyName } from '../utils/wrapName'
 import { ShareCardButton } from '../components/share/ShareCardButton'
 import { TeamShareCard } from '../components/share/TeamShareCard'
@@ -28,15 +27,16 @@ import { orderCategories } from '../utils/statOrder'
 import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns'
 import { RosterDayContent, RosterDayOnlyPlayedToggle, RosterDayStepper, SlotPill } from '../components/RosterDayView'
 import NoSpoilersSwitch from '../components/boxScores/NoSpoilersSwitch'
-import { CollapsibleSection } from '../components/CollapsibleSection'
 import { lineupSlotOrder, rosterDayCanFilterPlayed, rosterDayNote } from '../utils/rosterDay'
 import { easternToday, formatSlateDate, isBackToBackGameDay, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays, type WeekScheduleDay } from '../utils/slateWindow'
-import { rosterScheduleCellClass, rosterScheduleMiniCellClass } from '../utils/rosterScheduleTone'
+import { rosterScheduleCellClass } from '../utils/rosterScheduleTone'
 import BackToBackMark from '../components/BackToBackMark'
 import { useMobileRedesign } from '../mobile/flag'
 import MobileTeamDetail from '../mobile/team/MobileTeamDetail'
 import { TEAM_TABS, type TeamTab } from '../mobile/team/types'
 import { ManagerHintsTeamSection } from '../components/hints/ManagerHintsCard'
+import { TeamScoreboard } from '../components/team/TeamScoreboard'
+import '../mobile/team/team.css'
 
 // FG%/FT% are shown in the Shot Chart Stats block instead (fixed shooting
 // stats, unrelated to the league's configured scoring categories).
@@ -71,10 +71,9 @@ const TEAM_DETAIL_URL_SCHEMA = {
 
 const TeamDetail = () => {
   const { teamId } = useParams<{ teamId: string }>()
-  const navigate = useNavigate()
   const teamIdNumber = teamId ? parseInt(teamId, 10) : 0
-  const [urlState, setUrlState] = useUrlState(TEAM_DETAIL_URL_SCHEMA)
   const mobileRedesign = useMobileRedesign()
+  const [urlState, setUrlState] = useUrlState(TEAM_DETAIL_URL_SCHEMA)
   const [timePeriod, setTimePeriod] = useState<TimePeriod>(urlState.period)
   const [customRange, setCustomRange] = useState<CustomDateRange | null>(() =>
     urlState.from && urlState.to ? { start: urlState.from, end: urlState.to } : null
@@ -172,10 +171,6 @@ const TeamDetail = () => {
     const matchupRows = coverageSlate && datedMatchupReady ? datedMatchups ?? [] : liveMatchups
     return new Map(matchupRows.map((m: PlayerMatchup) => [m.player_name, m]))
   }, [coverageSlate, datedMatchupReady, datedMatchups, liveMatchups])
-  const [sectionTeamStatsOpen, setSectionTeamStatsOpen] = usePersistedState('teamDetail.section.teamStats', true)
-  const [sectionSlotUsageOpen, setSectionSlotUsageOpen] = usePersistedState('teamDetail.section.slotUsage', true)
-  const [sectionCoverageOpen, setSectionCoverageOpen] = usePersistedState('teamDetail.section.coverage', false)
-  const [sectionRosterOpen, setSectionRosterOpen] = usePersistedState('teamDetail.section.roster', true)
   // The route keeps this page mounted when it moves to another team (the header's
   // My team link, back/forward), so the roster selection resets with the team:
   // a set of the previous roster's names would leave every new player unchecked.
@@ -437,29 +432,7 @@ const TeamDetail = () => {
       default: return 'Season'
     }
   }
-
-  const heroStatLabel = (key: string | null): string => {
-    if (!key || key === 'lineup_slot') return showAverages ? 'PPG' : 'PTS'
-    const c = statColumns.find(s => s.key === key)
-    return c?.label ?? key
-  }
-
-  const heroStatValue = (player: Player): string => {
-    const key = sortBy
-    if (!key || key === 'lineup_slot' || key === 'include' || key.startsWith('day:')) {
-      return formatStat(player.stats.pts, player.stats.gp)
-    }
-    if (key === 'player_name') return player.player_name
-    if (key === 'positions') return player.positions.join(', ')
-    if (key === 'pro_team') return player.pro_team
-    if (key === 'week_games') return String(weekGameCount(opponents, player.pro_team, weekDays))
-    const isPct = key === 'fg_percentage' || key === 'ft_percentage'
-    const v = player.stats[key as PlayerStatKey] ?? 0
-    return formatStat(v, player.stats.gp, isPct)
-  }
-
   const statsLive = liveSectionNote(team_detail.live, 'stats')
-  const teamStatsSubtitle = `#${team_detail.ranking_stats.rank ?? '—'} · ${team_detail.ranking_stats.total_points} pts · GP ${team_detail.raw_averages.gp}${statsLive ? ` · ${statsLive}` : ''}`
   const rosterSubtitle =
     tableMode === 'daily'
       ? rosterDay
@@ -498,25 +471,19 @@ const TeamDetail = () => {
   const pointsTonight = tonightPoints(team_detail.live, team_detail.tonight)
   const playingNote = startersNote(team_detail.live, team_detail.tonight)
   const slotTonight = (slot: string) => slotTonightNote(team_detail.live, team_detail.tonight, slot)
-  const tonightTag = (text: string | null, tone: 'up' | 'down' = 'up') =>
-    text ? (
-      <span className={`ml-1.5 text-xs font-semibold ${tone === 'down' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`} data-testid="tonight-delta">
-        {text}
-      </span>
-    ) : null
-  const pointsTone = (team_detail.tonight?.points ?? 0) < 0 ? 'down' : 'up'
   const slotUsageBase =
     typeof leagueSummary?.nba_game_days_left === 'number'
       ? `${leagueSummary.nba_game_days_left} game days left${typeof leagueSummary?.nba_avg_pace === 'number' ? ` · NBA pace ${leagueSummary.nba_avg_pace.toFixed(1)}` : ''}`
       : undefined
   const slotUsageSubtitle = slotsLive ? [slotUsageBase, slotsLive].filter(Boolean).join(' · ') : slotUsageBase
+  const teamCount = leagueSummary?.total_teams ?? Math.max(...Object.values(team_detail.category_ranks), 1)
 
   if (mobileRedesign) {
     const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
     return (
       <MobileTeamDetail
         team={team_detail}
-        teamCount={leagueSummary?.total_teams ?? Math.max(...Object.values(team_detail.category_ranks), 1)}
+        teamCount={teamCount}
         espnUpdatedAt={leagueSummary?.espn_updated_at}
         shareCard={shareCardRender}
         perGameCategories={perGameCategories}
@@ -588,437 +555,170 @@ const TeamDetail = () => {
       />
     )
   }
-
+  const pct = (value: number) => `${(value * 100).toFixed(2)}%`
   return (
-    <div className="max-w-7xl mx-auto px-3 sm:px-4 space-y-4 sm:space-y-6 pb-4">
-      {/* Mobile: compact hero */}
-      <div className="sm:hidden rounded-lg bg-white p-3 shadow dark:bg-gray-800">
-        <button
-          type="button"
-          onClick={() => navigate('/teams')}
-          className="mb-2 inline-flex items-center text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-        >
-          <svg className="mr-1.5 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Teams
-        </button>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            <h1 className="truncate text-lg font-bold leading-tight text-gray-900 dark:text-gray-100">
-              {team_detail.team.team_name}
-              <MyTeamMark teamId={team_detail.team.team_id} />
-            </h1>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-              #{team_detail.ranking_stats.rank ?? '—'} · {team_detail.ranking_stats.total_points} pts · GP {team_detail.raw_averages.gp}
-            </p>
-            <div className="mt-1">
-              {team_detail.data_date
-                ? <DataDateBadge dataDate={team_detail.data_date} />
-                : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <ShareCardButton title={`${team_detail.team.team_name} Report`} renderCard={shareCardRender} />
-            <a
-              href={team_detail.espn_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg bg-red-600 px-2 text-xs font-semibold text-white shadow hover:bg-red-700"
-              aria-label="View on ESPN"
-            >
-              ESPN
-            </a>
-          </div>
-        </div>
-      </div>
-
-      {/* Desktop: original header */}
-      <div className="hidden sm:block bg-white rounded-lg shadow p-6 dark:bg-gray-800">
-        <button
-          type="button"
-          onClick={() => navigate('/teams')}
-          className="mb-4 inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors duration-200 cursor-pointer dark:text-gray-400 dark:hover:text-gray-100"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-          Back to Teams
-        </button>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {team_detail.team.team_name}
-              <MyTeamMark teamId={team_detail.team.team_id} />
-            </h1>
-            {team_detail.data_date
-              ? <DataDateBadge dataDate={team_detail.data_date} />
-              : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
-          </div>
-          <div className="flex items-center gap-2">
-            <ShareCardButton title={`${team_detail.team.team_name} Report`} renderCard={shareCardRender} />
-            <a
-              href={team_detail.espn_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-medium rounded-lg shadow hover:from-red-700 hover:to-red-800 transition-all duration-200"
-            >
-              View on ESPN
-              <svg className="ml-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          </div>
-        </div>
-      </div>
-
+    <div className="mr-root mr-page mr-tm-page mr-tm-desk">
+      <TeamScoreboard
+        teamId={team_detail.team.team_id}
+        teamName={team_detail.team.team_name}
+        rank={team_detail.ranking_stats.rank}
+        totalPoints={team_detail.ranking_stats.total_points}
+        gp={team_detail.raw_averages.gp}
+        teamCount={teamCount}
+        categories={team_detail.category_ranks}
+        espnUrl={team_detail.espn_url}
+        share={<ShareCardButton title={`${team_detail.team.team_name} Report`} renderCard={shareCardRender} />}
+        badge={team_detail.data_date
+          ? <DataDateBadge dataDate={team_detail.data_date} />
+          : <LiveBadge live={team_detail.live} espnUpdatedAt={leagueSummary?.espn_updated_at} align="left" />}
+        pointsTonight={pointsTonight}
+        pointsDown={(team_detail.tonight?.points ?? 0) < 0}
+        gpTonight={gpTonight}
+        playingNote={playingNote}
+        liveNote={statsLive}
+      />
       <ManagerHintsTeamSection teamId={teamIdNumber} layout="desktop" teamDetail={team_detail} />
-
-      <CollapsibleSection
-        id="team-stats"
-        title="Team statistics"
-        subtitle={teamStatsSubtitle}
-        open={sectionTeamStatsOpen}
-        onOpenChange={setSectionTeamStatsOpen}
-        contentClassName="p-4 sm:p-6"
-      >
-        {/* Mobile: compact snapshot-style layout */}
-        <div className="sm:hidden">
-          <div className="rounded-md bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:from-blue-950/50 dark:to-indigo-950/50">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-700 dark:text-gray-300">Overall rank</span>
-              <span className="font-bold text-blue-600 dark:text-blue-400">#{team_detail.ranking_stats.rank}</span>
-            </div>
-            <div className="mt-1 flex justify-between text-sm">
-              <span className="text-gray-700 dark:text-gray-300">Total points</span>
-              <span className="font-bold text-blue-600 dark:text-blue-400">{tonightTag(pointsTonight, pointsTone)} {team_detail.ranking_stats.total_points}</span>
-            </div>
-          </div>
-          {playingNote && (
-            <p className="mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">{playingNote}</p>
-          )}
-          <div className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between text-gray-800 dark:text-gray-200">
-              <span>Field goals</span>
-              <span>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({(team_detail.shot_chart.fg_percentage * 100).toFixed(1)}%)</span>
-            </div>
-            <div className="flex justify-between text-gray-800 dark:text-gray-200">
-              <span>Free throws</span>
-              <span>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({(team_detail.shot_chart.ft_percentage * 100).toFixed(1)}%)</span>
-            </div>
-          </div>
-          <div className="mt-3 border-t border-gray-100 pt-2 dark:border-gray-700">
-            <p className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Per-game</p>
-            <div className="max-h-48 space-y-1.5 overflow-y-auto text-sm">
+      <div className="mr-tm-context">
+        <section className="mr-tm-panel mr-tm-shoot" aria-label="Team statistics">
+          <h2>Shooting and averages</h2>
+          <div className="mr-tm-shoot-body">
+            <p className="mr-tm-subhead">Shot chart</p>
+            <dl className="mr-tm-kvs" style={{ flexGrow: 8 }}>
+              <div><dt>Field goals</dt><dd>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({pct(team_detail.shot_chart.fg_percentage)})</dd></div>
+              <div><dt>Free throws</dt><dd>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({pct(team_detail.shot_chart.ft_percentage)})</dd></div>
+              <div><dt>FGM</dt><dd>{team_detail.shot_chart.fgm}</dd></div>
+              <div><dt>FGA</dt><dd>{team_detail.shot_chart.fga}</dd></div>
+              <div><dt>FG%</dt><dd>{pct(team_detail.shot_chart.fg_percentage)}</dd></div>
+              <div><dt>FTM</dt><dd>{team_detail.shot_chart.ftm}</dd></div>
+              <div><dt>FTA</dt><dd>{team_detail.shot_chart.fta}</dd></div>
+              <div><dt>FT%</dt><dd>{pct(team_detail.shot_chart.ft_percentage)}</dd></div>
+            </dl>
+            <p className="mr-tm-subhead">Per game</p>
+            <dl className="mr-tm-kvs" style={{ flexGrow: Math.max(perGameCategories.length, 1) }}>
               {perGameCategories.map(key => (
-                <div className="flex justify-between" key={key}>
-                  <span className="text-gray-600 dark:text-gray-400">{CATEGORY_DISPLAY_NAMES[key] ?? key}</span>
-                  <span className="font-medium tabular-nums text-gray-900 dark:text-gray-100">{(team_detail.raw_averages.stats?.[key] ?? 0).toFixed(2)}</span>
-                </div>
+                <div key={key}><dt>{CATEGORY_DISPLAY_NAMES[key] ?? key}</dt><dd>{(team_detail.raw_averages.stats?.[key] ?? 0).toFixed(2)}</dd></div>
               ))}
-            </div>
+            </dl>
           </div>
-        </div>
-
-        {/* Desktop */}
-        <div className="hidden sm:block">
-          <div className="flex items-center space-x-4 mb-6 text-gray-600 dark:text-gray-300">
-            <span>Total Games Played:</span>
-            <span className="font-semibold text-gray-900 dark:text-gray-100">{team_detail.raw_averages.gp}{tonightTag(gpTonight)}</span>
-          </div>
-          {playingNote && (
-            <p className="mb-6 inline-block rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200" data-testid="starters-playing-note">
-              {playingNote}
-            </p>
-          )}
-
-          <div className="mb-6">
-            <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Ranking summary</h3>
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-lg border-l-4 border-blue-500 shadow-sm dark:from-blue-950/50 dark:to-indigo-950/50">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-medium text-gray-800 dark:text-gray-200">Overall rank</span>
-                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">#{team_detail.ranking_stats.rank}</span>
-              </div>
-              <div className="flex justify-between items-center mt-2">
-                <span className="text-lg font-medium text-gray-800 dark:text-gray-200">Total points</span>
-                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">{tonightTag(pointsTonight, pointsTone)} {team_detail.ranking_stats.total_points}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div>
-              <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Shot chart</h3>
-              <div className="space-y-3 text-gray-700 dark:text-gray-300">
-                <div className="flex justify-between">
-                  <span>Field goals</span>
-                  <span>{team_detail.shot_chart.fgm}/{team_detail.shot_chart.fga} ({(team_detail.shot_chart.fg_percentage * 100).toFixed(2)}%)</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Free throws</span>
-                  <span>{team_detail.shot_chart.ftm}/{team_detail.shot_chart.fta} ({(team_detail.shot_chart.ft_percentage * 100).toFixed(2)}%)</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">Per-game averages</h3>
-              <div className="space-y-3 text-gray-700 dark:text-gray-300">
-                {perGameCategories.map(key => (
-                  <div className="flex justify-between" key={key}>
-                    <span>{CATEGORY_DISPLAY_NAMES[key] ?? key}</span>
-                    <span className="tabular-nums">{(team_detail.raw_averages.stats?.[key] ?? 0).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </CollapsibleSection>
-      {team_detail.slot_usage && Object.keys(team_detail.slot_usage).length > 0 && (
-        <CollapsibleSection
-          id="slot-usage"
-          title="Slot usage"
-          subtitle={slotUsageSubtitle}
-          open={sectionSlotUsageOpen}
-          onOpenChange={setSectionSlotUsageOpen}
-          contentClassName="p-0"
-        >
-          <SlotUsageTable
-            embedded
-            slotUsage={team_detail.slot_usage}
-            avgPace={leagueSummary?.nba_avg_pace}
-            gameDaysLeft={leagueSummary?.nba_game_days_left}
-            gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
-            tonightNote={slotTonight}
-          />
-        </CollapsibleSection>
-      )}
-      <CollapsibleSection
-        id="roster-coverage"
-        title="Roster coverage"
-        subtitle="Games on your roster vs. the NBA slate"
-        open={sectionCoverageOpen}
-        onOpenChange={setSectionCoverageOpen}
-        contentClassName="p-0"
-      >
-        <RosterCoverage
-          embedded
-          players={team_detail.players ?? []}
-          teamId={teamIdNumber}
-          horizon={scheduleHorizon}
-          onHorizonChange={setScheduleHorizon}
-          externalSelectedDate={showSchedule ? scheduleSpotlightDate : null}
-          onSelectDate={date => {
-            setCoverageDate(date)
-            setScheduleFocusDate(date)
-          }}
-          onActiveDate={setActiveCoverageDate}
-        />
-      </CollapsibleSection>
-
-      <CollapsibleSection
-        id="team-roster"
-        title="Roster"
-        subtitle={rosterSubtitle}
-        open={sectionRosterOpen}
-        onOpenChange={setSectionRosterOpen}
-        contentClassName="p-0"
-      >
-      <div className="p-4 sm:p-6 dark:bg-gray-800">
-        {/* Mobile: compact sticky controls — section title is in the collapsible header */}
-        <div className="sticky top-0 z-30 -mx-4 mb-3 space-y-2 border-b border-gray-100 bg-white/95 px-4 py-2 backdrop-blur-md sm:hidden dark:border-gray-700 dark:bg-gray-800/95">
-          <div className="flex flex-col gap-2">
-            <StatsScheduleToggle mode={tableMode} onChange={setTableMode} includeDaily />
-            {showSchedule && weekDays.length > 0 && (
-              <div className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
-                {weekDays.map(day => {
-                  const focused = day.date === scheduleSpotlightDate
-                  return (
-                    <button
-                      key={day.date}
-                      type="button"
-                      onClick={() => setScheduleFocusDate(day.date)}
-                      className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-left text-[11px] leading-tight transition-colors ${
-                        focused
-                          ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
-                          : 'border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800/80'
-                      }`}
-                    >
-                      <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
-                      <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-            {showDaily && (
-              <div className="flex w-full flex-col gap-2">
-                {rosterIsToday && <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />}
-                {rosterPlayedFilter && (
-                  <RosterDayOnlyPlayedToggle compact checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
-                )}
-                <RosterDayStepper
-                  compact
-                  date={rosterDate || rosterDay?.date || today}
-                  firstDate={rosterDay?.first_date}
-                  lastDate={rosterDay?.last_date ?? today}
-                  note={rosterDay && !rosterDayFetching ? rosterDayNote(rosterDay, undefined, noSpoilers) : rosterDayFetching ? 'Loading this day…' : undefined}
-                  onChange={changeRosterDate}
-                />
-              </div>
-            )}
-          </div>
-          {showStats && (
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex min-h-[40px] min-w-0 flex-1 overflow-hidden rounded border border-gray-300 dark:border-gray-600">
-                <button
-                  type="button"
-                  className={`flex-1 border-r border-gray-300 px-2.5 py-2 text-xs font-medium dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}
-                  onClick={() => setShowAverages(true)}
-                >
-                  Per game
-                </button>
-                <button
-                  type="button"
-                  className={`flex-1 px-2.5 py-2 text-xs font-medium ${!showAverages ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 dark:bg-gray-800 dark:text-gray-200'}`}
-                  onClick={() => setShowAverages(false)}
-                >
-                  Totals
-                </button>
-              </div>
-              {showStatsSortReset && (
-                <button
-                  type="button"
-                  className="min-h-[40px] rounded border border-gray-300 px-2.5 py-1.5 text-xs text-gray-700 dark:border-gray-600 dark:text-gray-200"
-                  onClick={resetStatsSort}
-                >
-                  Reset sort
-                </button>
-              )}
-            </div>
-          )}
-          {showStats && (
-            <TimePeriodSelector
-              value={timePeriod}
-              onChange={setTimePeriod}
-              customRange={customRange}
-              onCustomRangeChange={setCustomRange}
+        </section>
+        {team_detail.slot_usage && Object.keys(team_detail.slot_usage).length > 0 && (
+          <section className="mr-tm-panel" id="slot-usage" aria-label="Slot usage">
+            <h2>Slot usage</h2>
+            {slotUsageSubtitle && <p className="mr-meta">{slotUsageSubtitle}</p>}
+            <SlotUsageTable
+              embedded
+              slotUsage={team_detail.slot_usage}
+              avgPace={leagueSummary?.nba_avg_pace}
+              gameDaysLeft={leagueSummary?.nba_game_days_left}
+              gameDaysElapsed={leagueSummary?.nba_game_days_elapsed}
+              tonightNote={slotTonight}
             />
-          )}
-          {showSchedule && <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} />}
-        </div>
+          </section>
+        )}
+        <section className="mr-tm-panel" aria-label="Roster coverage">
+          <RosterCoverage
+            embedded
+            players={team_detail.players ?? []}
+            teamId={teamIdNumber}
+            horizon={scheduleHorizon}
+            onHorizonChange={setScheduleHorizon}
+            externalSelectedDate={showSchedule ? scheduleSpotlightDate : null}
+            onSelectDate={date => {
+              setCoverageDate(date)
+              setScheduleFocusDate(date)
+            }}
+            onActiveDate={setActiveCoverageDate}
+          />
+        </section>
+      </div>
 
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <h2 className="sr-only sm:not-sr-only sm:text-xl sm:font-bold sm:text-gray-900 sm:dark:text-gray-100">Roster</h2>
-          {!team_detail.players && (
-            <p className="text-sm text-gray-500 italic dark:text-gray-400">Player data unavailable</p>
-          )}
-          <div className="hidden w-full flex-col gap-2 sm:flex sm:w-auto sm:items-end">
-            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-              <div className="order-1 w-full sm:order-3 sm:w-auto">
-                <StatsScheduleToggle mode={tableMode} onChange={setTableMode} includeDaily />
-              </div>
-              {showStats && (
-                <div className="order-2 flex w-full overflow-hidden rounded border border-gray-300 sm:order-2 sm:w-auto dark:border-gray-600">
-                  <button
-                    type="button"
-                    className={`flex-1 border-r border-gray-300 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none dark:border-gray-600 ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'}`}
-                    onClick={() => setShowAverages(true)}
-                  >
-                    Per Game
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700'}`}
-                    onClick={() => setShowAverages(false)}
-                  >
-                    Totals
-                  </button>
-                </div>
-              )}
-              {showStatsSortReset && (
-                <button
-                  type="button"
-                  className="order-4 rounded border border-gray-300 px-3 py-1.5 text-xs whitespace-nowrap text-gray-700 sm:order-2 dark:border-gray-600 dark:text-gray-200"
-                  onClick={resetStatsSort}
-                >
-                  Reset sort
-                </button>
-              )}
-            </div>
-            {showDaily ? (
-              <div className="flex w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-                {rosterIsToday && <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />}
-                {rosterPlayedFilter && (
-                  <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
-                )}
-                <RosterDayStepper
-                  date={rosterDate || rosterDay?.date || today}
-                  firstDate={rosterDay?.first_date}
-                  lastDate={rosterDay?.last_date ?? today}
-                  note={rosterDay && !rosterDayFetching ? rosterDayNote(rosterDay, undefined, noSpoilers) : rosterDayFetching ? 'Loading this day…' : undefined}
-                  onChange={changeRosterDate}
-                />
-              </div>
-            ) : showStats ? (
-              <div className="w-full sm:flex sm:justify-end">
-                <TimePeriodSelector
-                  value={timePeriod}
-                  onChange={setTimePeriod}
-                  customRange={customRange}
-                  onCustomRangeChange={setCustomRange}
-                />
-              </div>
-            ) : (
-              <div className="w-full sm:flex sm:justify-end">
-                <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} />
-              </div>
-            )}
+      <section className="mr-tm-panel mr-tm-roster" aria-label="Roster">
+      <div>
+        <div className="mr-tm-roster-bar">
+          <div>
+            <h2>Roster</h2>
+            <p className="mr-meta">{rosterSubtitle}</p>
           </div>
+          {!team_detail.players && (
+            <p className="mr-meta">Player data unavailable</p>
+          )}
+          <StatsScheduleToggle mode={tableMode} onChange={setTableMode} includeDaily variant="segmented" />
+        </div>
+        <div className="mr-tm-roster-tools">
+          {showDaily ? (
+            <>
+              {rosterIsToday && <NoSpoilersSwitch on={noSpoilers} onChange={setNoSpoilers} />}
+              {rosterPlayedFilter && (
+                <RosterDayOnlyPlayedToggle checked={rosterDayOnlyPlayed} onChange={setRosterDayOnlyPlayed} />
+              )}
+              <RosterDayStepper
+                date={rosterDate || rosterDay?.date || today}
+                firstDate={rosterDay?.first_date}
+                lastDate={rosterDay?.last_date ?? today}
+                note={rosterDay && !rosterDayFetching ? rosterDayNote(rosterDay, undefined, noSpoilers) : rosterDayFetching ? 'Loading this day…' : undefined}
+                onChange={changeRosterDate}
+              />
+            </>
+          ) : showStats ? (
+            <>
+              <div className="mr-seg mr-sm mr-fit" role="group" aria-label="Stat basis">
+                <button type="button" className="mr-seg-btn" aria-pressed={showAverages} onClick={() => setShowAverages(true)}>Per Game</button>
+                <button type="button" className="mr-seg-btn" aria-pressed={!showAverages} onClick={() => setShowAverages(false)}>Totals</button>
+              </div>
+              <TimePeriodSelector
+                value={timePeriod}
+                onChange={setTimePeriod}
+                customRange={customRange}
+                onCustomRangeChange={setCustomRange}
+              />
+              {showStatsSortReset && (
+                <button type="button" className="mr-link" onClick={resetStatsSort}>Reset sort</button>
+              )}
+            </>
+          ) : (
+            <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} variant="segmented" />
+          )}
         </div>
         {showSchedule && weekDays.length > 0 && (
-          <div className="mb-4">
-            <div className="mb-3 hidden flex-wrap gap-2 sm:flex">
+          <div className="mr-tm-roster-body">
+            <div className="mr-tm-days">
               {weekDays.map(day => {
                 const focused = day.date === scheduleSpotlightDate
                 return (
                   <button
                     key={day.date}
                     type="button"
+                    aria-pressed={focused}
                     onClick={() => setScheduleFocusDate(day.date)}
-                    className={`rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
-                      focused
-                        ? 'border-blue-500 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/40'
-                        : 'border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-800/80 dark:hover:bg-gray-800'
-                    }`}
+                    className="mr-tm-daychip"
                   >
-                    <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
-                    <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
+                    <b>{day.weekday}</b>
+                    <span>{day.label}</span>
                   </button>
                 )
               })}
             </div>
-            <div className="rounded-lg border border-gray-200 bg-gray-50/80 p-3 dark:border-gray-600 dark:bg-gray-900/40 sm:mt-0">
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            <div className="mr-tm-who-card">
+              <p className="mr-tm-subhead">
                 Who plays{scheduleSummaryHeading ? ` · ${scheduleSummaryHeading}` : ''}?
               </p>
               {scheduleSpotlightRows.length === 0 ? (
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">No games for your roster this day.</p>
+                <p className="mr-meta">No games for your roster this day.</p>
               ) : (
-                <ul className="mt-2 space-y-1.5 text-sm">
+                <ul className="mr-tm-who">
                   {scheduleSpotlightRows.map(p => {
                     const opp = weekOpponent(opponents, p.pro_team, scheduleSpotlightDate!)
                     const b2b = isBackToBackGameDay(opponents, p.pro_team, scheduleSpotlightDate!)
                     return (
-                      <li key={p.player_id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <li key={p.player_id}>
                         <SlotPill slot={p.lineup_slot} />
                         <PlayerNameLink name={wrapFriendlyName(p.player_name)} playerId={p.player_id} />
                         {b2b ? <BackToBackMark /> : null}
-                        <span className="text-gray-500 dark:text-gray-400">
+                        <span className="mr-meta">
                           {p.pro_team}
                           {opp && (
-                            <span className="ml-1">
+                            <span>
+                              {' '}
                               <WeekOpponent opponent={opp} />
                             </span>
                           )}
@@ -1057,147 +757,7 @@ const TeamDetail = () => {
           </div>
         ) : (
         <>
-        <div className="space-y-2 sm:hidden">
-          {showStats && (
-            <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-gray-400">
-              <span>Sort: tap a stat below</span>
-              <div className="flex flex-wrap items-center gap-2">
-                {showStatsSortReset && (
-                  <button
-                    type="button"
-                    className="rounded border border-gray-200 px-2 py-1 text-gray-700 dark:border-gray-600 dark:text-gray-300"
-                    onClick={resetStatsSort}
-                  >
-                    Reset sort
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="rounded border border-gray-200 px-2 py-1 text-gray-700 dark:border-gray-600 dark:text-gray-300"
-                  onClick={toggleAllPlayers}
-                >
-                  {includedPlayers === null || includedPlayers.size === visiblePlayers.length ? 'Exclude all' : 'Include all'}
-                </button>
-              </div>
-            </div>
-          )}
-          {sortedPlayers.map((player, idx) => {
-            const awaitingCoverageMatchup = !!coverageSlate && !datedMatchupReady
-            const matchup = awaitingCoverageMatchup ? undefined : matchupMap.get(player.player_name)
-            const noData = player.has_data === false
-            return (
-              <div
-                key={idx}
-                className="rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900/40"
-              >
-                <div className="flex items-start gap-2">
-                  <div className="shrink-0 pt-0.5">
-                    <SlotPill slot={player.lineup_slot} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className={`min-w-0 ${nameCellWrapClass(player.player_name)}`}>
-                        <PlayerNameLink name={wrapFriendlyName(player.player_name)} playerId={player.player_id} />
-                        <InjuryBadge status={matchup?.injury_status} />
-                      </div>
-                      {showStats && !noData && (
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-5 w-5 shrink-0 text-blue-600"
-                          checked={isPlayerIncluded(player.player_name)}
-                          onChange={() => togglePlayerInclusion(player.player_name)}
-                          aria-label={`Include ${player.player_name} in team average`}
-                        />
-                      )}
-                    </div>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      {player.positions.join(', ')} · {player.pro_team}
-                      {showStats && !noData && (
-                        <span className="ml-1 font-medium text-gray-700 dark:text-gray-300">
-                          · {heroStatLabel(sortBy)} {heroStatValue(player)}
-                        </span>
-                      )}
-                    </p>
-                  </div>
-                </div>
-                {showSchedule && (
-                  <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3 dark:border-gray-700">
-                    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800 dark:bg-blue-950/60 dark:text-blue-200">
-                      {weekGameCount(opponents, player.pro_team, weekDays)} games
-                    </span>
-                    <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
-                      {weekDays.map(day => {
-                        const b2b = isBackToBackGameDay(opponents, player.pro_team, day.date)
-                        return (
-                        <div
-                          key={day.date}
-                          className={rosterScheduleMiniCellClass(day.date === scheduleSpotlightDate, b2b)}
-                        >
-                          <div className="font-semibold text-gray-800 dark:text-gray-200">{day.weekday}</div>
-                          <div className="text-gray-500 dark:text-gray-400">{day.label}</div>
-                          <div className="mt-0.5 font-medium text-gray-900 dark:text-gray-100">
-                            <WeekOpponent opponent={weekOpponent(opponents, player.pro_team, day.date)} />
-                          </div>
-                        </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-                {showStats && !noData && (
-                  <div className="mt-3 border-t border-gray-100 pt-3 dark:border-gray-700">
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-                      {statColumns.map(col => (
-                        <div key={col.key} className="flex items-center justify-between gap-2">
-                          <button
-                            type="button"
-                            className="shrink-0 text-left text-gray-500 dark:text-gray-400"
-                            onClick={() => handleSort(col.key)}
-                          >
-                            {col.label}
-                            {sortBy === col.key ? (sortOrder === 'asc' ? ' ↑' : ' ↓') : ''}
-                          </button>
-                          <span className="font-medium tabular-nums text-gray-900 dark:text-gray-100">
-                            {formatStat(
-                              player.stats[col.key as PlayerStatKey],
-                              player.stats.gp,
-                              col.key === 'fg_percentage' || col.key === 'ft_percentage',
-                            )}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {showStats && noData && (
-                  <p className="mt-2 text-xs italic text-gray-400 dark:text-gray-500">No data for this range</p>
-                )}
-              </div>
-            )
-          })}
-          {showStats && (
-            <div className="rounded-lg border border-blue-200 bg-gradient-to-r from-blue-50 to-indigo-50 p-3 dark:border-blue-900 dark:from-blue-950/40 dark:to-indigo-950/40">
-              <p className="mb-2 text-sm font-bold text-blue-900 dark:text-blue-100">
-                {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()}) ·{' '}
-                {includedPlayers === null ? visiblePlayers.length : includedPlayers.size} players
-              </p>
-              <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                {statColumns.map(col => (
-                  <div key={col.key} className="flex justify-between gap-2 text-blue-900 dark:text-blue-100">
-                    <span className="text-blue-800/90 dark:text-blue-300/90">{col.label}</span>
-                    <span className="font-bold tabular-nums">
-                      {col.key === 'fg_percentage' || col.key === 'ft_percentage'
-                        ? `${formatNumber((teamAverage[col.key as keyof typeof teamAverage] as number) * 100)}%`
-                        : formatStat(teamAverage[col.key as keyof typeof teamAverage] as number, showAverages ? 1 : teamAverage.gp)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="hidden sm:block overflow-auto max-h-[70vh] mq-scroll-container">
+        <div className="mr-tm-table-wrap">
           <table className="min-w-full border-separate border-spacing-0 [&_th]:border-b [&_td]:border-b [&_th]:border-gray-200 [&_td]:border-gray-200 dark:[&_th]:border-gray-700 dark:[&_td]:border-gray-700">
             <thead className="sticky top-0 z-20 bg-gray-50 dark:bg-gray-900">
               <tr>
@@ -1210,7 +770,7 @@ const TeamDetail = () => {
                     } transition-colors duration-150 ${
                       column.key === 'player_name' ? 'sticky left-0 z-10 border-r border-r-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900' : ''
                     } ${
-                      showSchedule && column.day?.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/50' : ''
+                      showSchedule && column.day?.date === scheduleSpotlightDate ? 'mr-tm-spot' : ''
                     }`}
                   >
                     {column.key === 'include' ? (
@@ -1220,7 +780,7 @@ const TeamDetail = () => {
                           type="checkbox"
                           checked={includedPlayers === null || includedPlayers.size === visiblePlayers.length}
                           onChange={toggleAllPlayers}
-                          className="w-4 h-4 text-blue-600 cursor-pointer"
+                          className="mr-tm-check"
                           title="Toggle all players"
                         />
                       </div>
@@ -1264,7 +824,7 @@ const TeamDetail = () => {
                           checked={!noData && isPlayerIncluded(player.player_name)}
                           disabled={noData}
                           onChange={() => togglePlayerInclusion(player.player_name)}
-                          className="w-4 h-4 text-blue-600 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                          className="mr-tm-check"
                           title={noData ? 'Excluded from average — no data for this range' : undefined}
                         />
                       </td>
@@ -1320,14 +880,14 @@ const TeamDetail = () => {
                   </React.Fragment>
                 )
               })}
-              <tr className="bg-gradient-to-r from-blue-50 to-indigo-50 font-bold dark:from-blue-950/40 dark:to-indigo-950/40 [&_td]:border-t-2 [&_td]:border-t-blue-400 [&_td]:border-b-0">
+              <tr className="mr-tm-avg">
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-700 dark:text-blue-300">-</td>
                 {!showSchedule && (
                   <td className="px-4 py-3 whitespace-nowrap text-center">
                     <span className="text-blue-600 dark:text-blue-400">-</span>
                   </td>
                 )}
-                <td className="sticky left-0 z-10 border-r border-r-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 text-sm font-bold whitespace-nowrap text-blue-900 dark:border-gray-700 dark:from-blue-950/50 dark:to-indigo-950/50 dark:text-blue-100">
+                <td className="sticky left-0 z-10 border-r border-r-gray-200 px-4 py-3 text-sm font-bold whitespace-nowrap">
                   {showAverages ? 'Avg' : 'Total'} ({getTimePeriodLabel()})
                 </td>
                 {!showSchedule && (
@@ -1340,7 +900,7 @@ const TeamDetail = () => {
                 {showSchedule ? (
                   <>
                     {weekDays.map(day => (
-                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm text-blue-900 ${day.date === scheduleSpotlightDate ? 'bg-blue-100 dark:bg-blue-950/40' : ''}`} />
+                      <td key={day.date} className={`px-4 py-3 whitespace-nowrap text-sm ${day.date === scheduleSpotlightDate ? 'mr-tm-spot' : ''}`} />
                     ))}
                     <td className="px-4 py-3 whitespace-nowrap text-sm text-blue-900" />
                   </>
@@ -1365,7 +925,7 @@ const TeamDetail = () => {
         </>
         )}
       </div>
-      </CollapsibleSection>
+      </section>
     </div>
   )
 }

@@ -275,6 +275,19 @@ describe('Rankings page', () => {
     expect(within(beta).getAllByRole('cell')[0].textContent).toBe('#1▲1');
   });
 
+  it('Last night ranks that one scored day', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<Rankings />);
+    await user.click(await screen.findByRole('button', { name: 'Last night' }));
+    await waitFor(() => {
+      const rankingsUrl = vi.mocked(fetch).mock.calls.map(([input]) => requestUrl(input)).find(u => u.includes('start_date='));
+      const params = new URL(rankingsUrl!, 'http://localhost').searchParams;
+      expect(params.get('start_date')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(params.get('end_date')).toBe(params.get('start_date'));
+    });
+    expect(screen.getByRole('button', { name: 'Last night' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('a date range shows no moves and no movers button', async () => {
     renderWithProviders(<Rankings />, { route: '/?from=2025-10-05&to=2025-10-20' });
     await waitFor(() => expect(screen.getByText('Alpha Squad')).toBeInTheDocument());

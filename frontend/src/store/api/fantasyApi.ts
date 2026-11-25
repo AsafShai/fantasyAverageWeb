@@ -1,5 +1,5 @@
 import { createApi, defaultSerializeQueryArgs, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, PlayerSeasonHistoryResponse, CategoryResponse, RosterDay } from '../../types/api';
+import type { LeagueRankings, TeamDetail, LeagueSummary, HeatmapData, LeagueShotsData, TeamPlayers, Team, TradeSuggestionsResponse, PaginatedPlayers, TimePeriod, RankingsOverTimeResponse, OverTimeSource, NbaTeamInfo, TeamDepthChart, NbaPlayerBio, NbaPlayerStatsResponse, PlayerMatchup, ProjectionStats, PlayerNextGameProjection, PlayersListResponse, PlayerStoreState, TeamsListResponse, TeamStoreState, DraftReport, MinutesResponse, UsageResponse, RegressionResponse, RegressionMode, GameLogResponse, ScheduleResponse, TeamGameResult, AdpResponse, AdpIndexResponse, AdpQueryArgs, AdpIndexQueryArgs, AdpMoversResponse, AdpMoversQueryArgs, TodayHub, RankChanges, NightSurprises, PeriodSurprises, PlayerGameLogResponse, PlayerSeasonHistoryResponse, CategoryResponse, RosterDay } from '../../types/api';
 import type { InjuryRecord } from '../../types/injury';
 import type { GameSlug, LeaderboardRow, MinigamePlayerBundle } from '../../minigames/types';
 import type { EstimatorResults } from '../../types/estimator';
@@ -23,8 +23,8 @@ export const fantasyApi = createApi({
   }),
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'MinigameLeaderboard'],
   endpoints: (builder) => ({
-    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string; settled?: boolean }>({
-      query: ({ sortBy, order = 'asc', startDate, endDate, settled } = {}) => ({
+    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string; settled?: boolean; playedOnly?: boolean }>({
+      query: ({ sortBy, order = 'asc', startDate, endDate, settled, playedOnly } = {}) => ({
         url: '/rankings',
         params: {
           sort_by: sortBy,
@@ -32,6 +32,7 @@ export const fantasyApi = createApi({
           ...(startDate ? { start_date: startDate } : {}),
           ...(endDate ? { end_date: endDate } : {}),
           ...(settled ? { settled: true } : {}),
+          ...(playedOnly ? { played_only: true } : {}),
         },
       }),
       providesTags: ['Rankings'],
@@ -122,6 +123,10 @@ export const fantasyApi = createApi({
     }),
     getNbaTeamDepthChart: builder.query<TeamDepthChart, string>({
       query: (teamId) => `/nba-teams/${teamId}/depthchart`,
+    }),
+    getTeamResults: builder.query<TeamGameResult[], string>({
+      query: (teamId) => `/nba-teams/${teamId}/results`,
+      keepUnusedDataFor: 600,
     }),
     getSchedule: builder.query<ScheduleResponse, void>({
       query: () => '/nba/schedule',
@@ -379,6 +384,7 @@ export const {
   useGetNbaTeamsListQuery,
   useGetNbaTeamDepthChartQuery,
   useGetScheduleQuery,
+  useGetTeamResultsQuery,
   useGetNbaSeasonWindowQuery,
   useGetBoxScoreboardQuery,
   useGetGameBoxScoreQuery,

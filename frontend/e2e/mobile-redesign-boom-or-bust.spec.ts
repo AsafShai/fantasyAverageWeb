@@ -54,7 +54,7 @@ test.describe('phone Boom or Bust', () => {
   test('summary, period chips, both cards with their sliders', async ({ page }) => {
     await openBob(page)
     await expect(page.getByText('52 of 52 players scored · 47 with a model estimate')).toBeVisible()
-    await expect(page.getByRole('group', { name: 'Period' }).getByRole('button')).toHaveText(['Last night', 'Last 7 days', 'Last 30 days', 'Season', 'Custom'])
+    await expect(page.getByRole('group', { name: 'Period' }).getByRole('button')).toHaveText(['📅 Full Season', '🌙 Last night', '🔥 Last 7 Days', '📈 Last 30 Days', '📆 Custom'])
     await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(3)')
     await expect(page.getByRole('heading', { name: /Busts/ })).toContainText('(2)')
     await expect(page.getByLabel('Surprise threshold')).toBeVisible()
@@ -63,6 +63,23 @@ test.describe('phone Boom or Bust', () => {
     await expect(page.getByText('3 players')).toBeVisible()
     await expectNoHorizontalScroll(page)
     await shots(page, 'bob-light')
+  })
+
+  test('a fantasy team: its lineup control fits the screen', async ({ page }) => {
+    await openBob(page)
+    // always there, on All
+    await expect(page.getByRole('radiogroup', { name: 'Lineup' })).toBeVisible()
+    await page.getByRole('button', { name: 'Fantasy team: All fantasy teams' }).click()
+    await page.getByRole('option', { name: 'HY team' }).click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(1)')
+    const benched = page.getByRole('radiogroup', { name: 'Lineup' }).getByText('Benched')
+    await expect(benched).toBeInViewport({ ratio: 1 })
+    await expectNoHorizontalScroll(page)
+    await benched.click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(0)')
+    await page.getByRole('button', { name: 'Clear' }).click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(3)')
+    await shots(page, 'bob-team')
   })
 
   test('previous night button', async ({ page }) => {

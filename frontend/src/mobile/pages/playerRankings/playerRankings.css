@@ -6,12 +6,18 @@
 
 .mr-pr-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 /* Blue = calc mode, Purple = display mode (today's legend) */
-.mr-pr-calc .mr-seg-btn[aria-checked="true"] { color: var(--mr-primary-2); }
-.mr-pr-disp .mr-seg-btn[aria-checked="true"] { color: var(--mr-brand-to); }
+.mr-pr-calc .mr-seg-btn[aria-checked="true"],
+.mr-pr-calc .mr-seg-btn[aria-pressed="true"] { color: var(--mr-primary-2); }
+.mr-pr-disp .mr-seg-btn[aria-checked="true"],
+.mr-pr-disp .mr-seg-btn[aria-pressed="true"] { color: var(--mr-brand-to); }
 .mr-pr-blue { color: var(--mr-primary-2); font-weight: 600; }
 .mr-pr-purple { color: var(--mr-brand-to); font-weight: 600; }
-.dark .mr-pr-disp .mr-seg-btn[aria-checked="true"], .dark .mr-pr-purple { color: #A78BFA; }
-.dark .mr-pr-calc .mr-seg-btn[aria-checked="true"], .dark .mr-pr-blue { color: #60A5FA; }
+.dark .mr-pr-disp .mr-seg-btn[aria-checked="true"],
+.dark .mr-pr-disp .mr-seg-btn[aria-pressed="true"],
+.dark .mr-pr-purple { color: #A78BFA; }
+.dark .mr-pr-calc .mr-seg-btn[aria-checked="true"],
+.dark .mr-pr-calc .mr-seg-btn[aria-pressed="true"],
+.dark .mr-pr-blue { color: #60A5FA; }
 
 /* weights card */
 .mr-pr-weights { display: flex; flex-direction: column; gap: 4px; }
@@ -31,6 +37,94 @@
 .mr-pr-punt:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
 .mr-pr-foot { display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--mr-divider); }
 .mr-pr-foot .mr-meta { flex: 1; }
+
+/* Desktop filter card. The phone sheet does not use these. */
+.pr-filters.mr-root {
+  background: var(--mr-card);
+  color: var(--mr-text);
+  border: 1px solid var(--mr-border);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: none;
+}
+.pr-top-search { flex: 1; min-width: 0; }
+.pr-filters .pr-search { max-width: none; }
+.pr-filters .pr-search input {
+  background: var(--mr-card);
+  border-color: var(--mr-border);
+  color: var(--mr-text);
+  box-shadow: none;
+}
+.pr-search-note { margin: 6px 0 0; font-size: 12px; color: var(--mr-muted); }
+.pr-view-results {
+  border: none; background: none; padding: 0; cursor: pointer;
+  color: var(--mr-primary); font-weight: 600; font-size: 12px;
+}
+.pr-reset {
+  flex-shrink: 0; align-self: flex-start; margin-left: auto; min-height: 32px; padding: 0 14px; border-radius: 10px;
+  border: 1px solid var(--mr-border); background: var(--mr-sunken); color: var(--mr-text);
+  font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.pr-reset:hover { background: var(--mr-seg-track); }
+.pr-range { margin: 0; font-size: 12px; color: var(--mr-muted); }
+.pr-label { font-size: 12px; font-weight: 700; color: var(--mr-muted); }
+.pr-rank, .pr-players { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px 22px; }
+.pr-rank { align-items: flex-start; }
+.pr-mode { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.pr-filters .mr-pr-calc .mr-seg-btn[aria-pressed="true"] { background: var(--mr-primary-2); color: #fff; box-shadow: none; }
+.pr-filters .mr-pr-disp .mr-seg-btn[aria-pressed="true"] { background: #7C3AED; color: #fff; box-shadow: none; }
+.pr-block, .pr-field, .pr-nba, .pr-fantasy-menu, .pr-show { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pr-period-line { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.pr-period-root { min-width: 0; }
+.pr-period {
+  display: flex; flex-wrap: wrap; gap: 6px; width: auto; padding: 0; background: transparent;
+}
+.pr-period-btn {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 32px; padding: 0 12px; border: 1px solid var(--mr-border); border-radius: 999px;
+  background: transparent; color: var(--mr-text-2); font-size: 12px; font-weight: 600;
+  white-space: nowrap; cursor: pointer;
+}
+.pr-period-btn.pr-period-on {
+  background: var(--mr-primary-2); border-color: var(--mr-primary-2); color: #fff; box-shadow: none;
+}
+.pr-period-btn:focus-visible, .pr-reset:focus-visible { outline: 2px solid var(--mr-primary-2); outline-offset: 1px; }
+.pr-show-seg { background: transparent; padding: 0; gap: 6px; }
+.pr-show-seg .mr-seg-btn {
+  flex: 0 0 auto; min-height: 32px; padding: 0 12px; border: 1px solid var(--mr-border); border-radius: 999px;
+  background: transparent; box-shadow: none;
+}
+.pr-show-seg .mr-seg-btn[aria-pressed="true"] {
+  background: var(--mr-ink); border-color: var(--mr-ink); color: var(--mr-on-ink); box-shadow: none;
+}
+.pr-num {
+  width: 72px; height: 34px; padding: 0 8px; border: 1px solid var(--mr-border); border-radius: 10px;
+  background: var(--mr-card); color: var(--mr-text); font-size: 13px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pr-filters button[aria-haspopup="listbox"] {
+  width: auto; min-width: 148px; min-height: 34px; border-radius: 10px; border-color: var(--mr-border);
+  background: var(--mr-card); color: var(--mr-text);
+}
+.pr-weights { padding-top: 4px; border-top: 1px solid var(--mr-divider); }
+@media (min-width: 1024px) {
+  .pr-range { white-space: nowrap; margin-left: auto; }
+}
+@media (max-width: 1023px) {
+  .pr-view-results { display: inline; }
+}
+@media (min-width: 1024px) {
+  .pr-view-results { display: none; }
+}
+
+/* Desktop table: the same my-team row as the phone table, including the sticky name cell. */
+.pr-rankings tr.mr-me > td {
+  background-color: var(--mr-row-me) !important;
+}
 
 /* table */
 .mr-pr-results { scroll-margin-top: calc(var(--mr-hdr-h) + 8px); }

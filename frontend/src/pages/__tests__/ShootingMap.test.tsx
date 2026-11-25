@@ -193,7 +193,8 @@ describe('ShootingMap page', () => {
     const user = userEvent.setup()
     renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
-    await user.click(screen.getByRole('button', { name: 'Custom' }))
+    const chart = screen.getByRole('group', { name: 'Chart' })
+    await user.click(within(chart).getByRole('button', { name: 'Custom' }))
     expect(await screen.findByRole('heading', { name: 'Best STL + BLK' })).toBeInTheDocument()
     const x = screen.getByRole('group', { name: 'X axis' }), y = screen.getByRole('group', { name: 'Y axis' })
     expect(within(x).getAllByRole('button')).toHaveLength(14)
@@ -223,7 +224,7 @@ describe('ShootingMap page', () => {
     await user.click(screen.getByRole('menuitemradio', { name: 'FT% × FTA' }))
     expect(await screen.findByRole('heading', { name: 'Best for FT%' })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'X axis' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Custom' }))
+    await user.click(within(screen.getByRole('group', { name: 'Chart' })).getByRole('button', { name: 'Custom' }))
     expect(await screen.findByRole('heading', { name: 'Best PTS + AST' })).toBeInTheDocument()
   })
 
@@ -231,7 +232,7 @@ describe('ShootingMap page', () => {
     const user = userEvent.setup()
     renderWithProviders(<ShootingMap />, { route: '/scatter-map' })
     await screen.findByRole('heading', { name: 'Best for FG%' })
-    await user.click(screen.getByRole('button', { name: 'Custom' }))
+    await user.click(within(screen.getByRole('group', { name: 'Chart' })).getByRole('button', { name: 'Custom' }))
     await user.click(within(screen.getByRole('group', { name: 'X axis' })).getByRole('button', { name: 'FG Imp' }))
     await user.click(within(screen.getByRole('group', { name: 'Y axis' })).getByRole('button', { name: 'FGA' }))
     const best = (await screen.findByRole('heading', { name: 'Highest FG Imp' })).parentElement!

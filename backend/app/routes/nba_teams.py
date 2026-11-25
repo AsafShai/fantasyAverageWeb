@@ -2,11 +2,13 @@ import logging
 
 from fastapi import APIRouter, HTTPException
 
-from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart
+from app.models.nba_team_models import DepthChartPlayer, DepthChartPosition, InjuryInfo, NbaTeamInfo, TeamDepthChart, TeamGameResult
 from app.services import injury_service
+from app.services.team_results_service import UnknownTeam, get_team_results
 from app.services.depth_chart_service import DepthChartFetchError, DepthChartService
 from app.utils.constants import PRO_TEAM_MAP, NBA_TEAM_NAMES
 from app.utils.name_matching import normalize_player_name
+from model_stats_inference.espn.client import EspnUnavailableError
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -17,6 +19,17 @@ _depth_chart_service = DepthChartService()
 @router.get("/", response_model=list[NbaTeamInfo])
 async def list_nba_teams():
     return [NbaTeamInfo(team_id=str(k), abbreviation=v, team_name=NBA_TEAM_NAMES[v]) for k, v in PRO_TEAM_MAP.items() if k != 0]
+
+
+@router.get("/{team_id}/results", response_model=list[TeamGameResult])
+async def get_results(team_id: int):
+    """This season's finished games for the team, in date order, with final scores."""
+    try:
+        return await get_team_results(team_id)
+    except UnknownTeam:
+        raise HTTPException(status_code=404, detail=f"Team {team_id} not found")
+    except EspnUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="NBA results are temporarily unavailable") from exc
 
 
 @router.get("/{team_id}/depthchart", response_model=TeamDepthChart)
