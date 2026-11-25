@@ -66,6 +66,12 @@ const requested = (part: string) =>
     .map(([input]) => (typeof input === 'string' ? input : input instanceof URL ? input.href : (input as Request).url))
     .filter((url) => url.includes(part))
 
+const LEAGUE = [
+  { team_id: 1, team_name: "Asaf's Team", abbrev: 'ASA' },
+  { team_id: 4, team_name: 'DORELIT', abbrev: 'DOR' },
+  { team_id: 8, team_name: 'Idle Team', abbrev: 'IDL' },
+]
+
 function stubApi(latest: Response | (() => Response)) {
   vi.stubGlobal(
     'fetch',
@@ -75,6 +81,7 @@ function stubApi(latest: Response | (() => Response)) {
       if (url.includes('/surprises/period')) return Response.json(period)
       if (url.includes('/surprises/2024-01-04')) return Response.json({ ...night, game_date: '2024-01-04', latest_run: null })
       if (url.includes('/surprises/latest')) return typeof latest === 'function' ? latest() : latest
+      if (url.endsWith('/teams/')) return Response.json(LEAGUE)
       return new Response('not found', { status: 404 })
     }),
   )
@@ -242,6 +249,8 @@ describe('Boom or Bust page', () => {
     const fantasy = screen.getByLabelText('Fantasy team')
     const nba = screen.getByLabelText('NBA team')
     expect(screen.queryByRole('group', { name: 'Lineup' })).not.toBeInTheDocument()   // only for one fantasy team
+    // every league team is listed, also one with no row that night
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Idle Team' })).toBeInTheDocument())
 
     fireEvent.change(nba, { target: { value: 'DAL' } })
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
@@ -250,7 +259,9 @@ describe('Boom or Bust page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(3)')
 
-    fireEvent.change(fantasy, { target: { value: 'DOR' } })
+    // the value is the team id, so a new code or name does not lose the pick
+    expect(screen.getByRole('option', { name: 'DORELIT' })).toHaveValue('4')
+    fireEvent.change(fantasy, { target: { value: '4' } })
     expect(screen.getByText('💥 Booms')).toHaveTextContent('(2)')
     expect(screen.getByText('💩 Busts')).toHaveTextContent('(0)')
     expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true')   // default: all

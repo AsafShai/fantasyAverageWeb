@@ -776,6 +776,8 @@ export interface SurpriseRow {
   /** Fantasy context that night: team abbrev (null = free agent), lineup slot, and
    * whether that slot counted (false = bench / IR; null when unknown). */
   fantasy_team: string | null
+  /** The fantasy team's id that night, the stable key (a code or a name can change). */
+  fantasy_team_id?: number | null
   /** The team's current full name ("Trust the process"); the code when unknown. */
   fantasy_team_name?: string | null
   lineup_slot: string | null

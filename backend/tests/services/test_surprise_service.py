@@ -231,6 +231,9 @@ async def test_night_response_sends_every_scored_row_split_by_sign(monkeypatch):
     assert out["good"][0]["reasons"][0]["stat"] == "PTS"
     assert out["good"][0]["fantasy_team"] == "AAT" and out["good"][0]["started"] is True     # PG slot
     assert out["good"][1]["fantasy_team"] is None and out["good"][1]["started"] is None      # free agent
+    # the team's id rides along: the stable key when a code or a name changes
+    assert out["good"][0]["fantasy_team_id"] == 7 and out["good"][1]["fantasy_team_id"] is None
+    assert other_season["fantasy_team_id"] is None
     assert out["bad"][0]["lineup_slot"] == "BE" and out["bad"][0]["started"] is False
     assert out["thresholds"] == {"good": settings.surprise_good_threshold, "bad": settings.surprise_bad_threshold}
     assert out["computed_at"].startswith("2025-12-02T07:00")
