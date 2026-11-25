@@ -23,8 +23,8 @@ export const fantasyApi = createApi({
   }),
   tagTypes: ['Rankings', 'Team', 'League', 'Heatmap', 'Shots', 'Teams', 'TradeSuggestions', 'Players', 'Estimator', 'MinigameLeaderboard'],
   endpoints: (builder) => ({
-    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string; settled?: boolean }>({
-      query: ({ sortBy, order = 'asc', startDate, endDate, settled } = {}) => ({
+    getRankings: builder.query<LeagueRankings, { sortBy?: string; order?: string; startDate?: string; endDate?: string; settled?: boolean; playedOnly?: boolean }>({
+      query: ({ sortBy, order = 'asc', startDate, endDate, settled, playedOnly } = {}) => ({
         url: '/rankings',
         params: {
           sort_by: sortBy,
@@ -32,6 +32,7 @@ export const fantasyApi = createApi({
           ...(startDate ? { start_date: startDate } : {}),
           ...(endDate ? { end_date: endDate } : {}),
           ...(settled ? { settled: true } : {}),
+          ...(playedOnly ? { played_only: true } : {}),
         },
       }),
       providesTags: ['Rankings'],

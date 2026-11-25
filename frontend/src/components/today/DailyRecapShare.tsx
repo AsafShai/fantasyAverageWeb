@@ -10,7 +10,7 @@ import { slatePlayerValues } from '../boxScores/slateValues'
 import { ShareCardButton, type ShareCardOptions } from '../share/ShareCardButton'
 import { DailyRecapLoadingCard, DailyRecapShareCard } from '../share/DailyRecapShareCard'
 import { toLocalIso } from '../../utils/dateRange'
-import { buildDailyRecap, dailyRecapMessage, isOffNight, recapNightLabel, RECAP_SURPRISE_BAR } from '../../utils/dailyRecap'
+import { buildDailyRecap, dailyRecapMessage, isOffNight, recapNightLabel, recapNightNote, RECAP_SURPRISE_BAR } from '../../utils/dailyRecap'
 
 interface QueryState {
   data?: unknown
@@ -50,7 +50,9 @@ function DailyRecapLoader({ dark, seasonStart, onReady }: ShareCardOptions & {
   const start = night == null ? '' : (seasonStart && night < seasonStart ? seasonStart : night)
   const end = night == null ? '' : dayAfter(night)
   const rangeOk = !hubWaiting && !offNight && start !== '' && start < end
-  const rankings = useGetRankingsQuery({ startDate: start, endDate: end, settled: true }, { skip: !rangeOk })
+  // A team with no games that night is left out of the ranking: the others
+  // share the points among themselves.
+  const rankings = useGetRankingsQuery({ startDate: start, endDate: end, settled: true, playedOnly: true }, { skip: !rangeOk })
   const moves = useGetRankChangesQuery({ mode: 'averages', settled: true }, { skip: hubWaiting || offNight })
   const surprises = useGetSurprisesForDateQuery(night ?? '', { skip: !night || hubWaiting || offNight })
   const slate = useGetBoxSlateValuesQuery(night ?? '', { skip: !night || hubWaiting || offNight })
@@ -103,9 +105,15 @@ function DailyRecapLoader({ dark, seasonStart, onReady }: ShareCardOptions & {
     night,
   )
   const subtitle = label.linesNote ? `${label.headline} · lines ${label.linesNote}` : label.headline
+  const nightNote = recapNightNote(
+    offNight ? null : slate.data?.games_counted,
+    offNight ? null : rankings.data?.averages_rankings.length,
+    offNight ? null : rankings.data?.league_team_count,
+  )
   const key = waiting ? 'loading' : [
     label.headline,
     label.linesNote ?? '',
+    nightNote.note ?? '',
     recap.best?.teamId, recap.best?.total,
     recap.worst?.teamId, recap.worst?.total,
     recap.rise?.teamId, recap.rise?.totalDelta,
@@ -126,6 +134,8 @@ function DailyRecapLoader({ dark, seasonStart, onReady }: ShareCardOptions & {
     <DailyRecapShareCard
       dark={dark}
       subtitle={subtitle}
+      note={nightNote.note ?? undefined}
+      teamsLeftOut={nightNote.teamsLeftOut}
       recap={recap}
       fontCss={fontCss ?? undefined}
     />

@@ -10,6 +10,7 @@ import {
   pickNightTeams,
   pickStartBench,
   pickSurprises,
+  recapNightNote,
   RECAP_SURPRISE_BAR,
   recapNightLabel,
 } from '../dailyRecap'
@@ -215,6 +216,18 @@ describe('recapNightLabel', () => {
     })
     expect(recapNightLabel('2026-11-17', '2026-11-18', '2026-11-17').linesNote).toBe('Nov 17, 2026')
     expect(recapNightLabel(null, null, null).headline).toBe('Last night')
+  })
+})
+
+describe('recapNightNote', () => {
+  it('counts the games, and the teams only when some sat the night out', () => {
+    expect(recapNightNote(5, 12, 12)).toEqual({ note: '5 games', teamsLeftOut: false })
+    expect(recapNightNote(1, 11, 12)).toEqual({ note: '1 game · 11 of 12 fantasy teams played', teamsLeftOut: true })
+  })
+
+  it('says nothing it does not know', () => {
+    expect(recapNightNote(undefined, 11, undefined)).toEqual({ note: null, teamsLeftOut: false })
+    expect(recapNightNote(0, 0, 12)).toEqual({ note: null, teamsLeftOut: false })
   })
 })
 

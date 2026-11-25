@@ -15,6 +15,9 @@ class LeagueRankings(LiveAware):
     date_range_end: Optional[date] = None
     actual_start_date: Optional[date] = None
     actual_end_date: Optional[date] = None
+    # Date range only: every team in the league, including any that
+    # ``played_only`` left out of the rankings.
+    league_team_count: Optional[int] = None
 
 class LeagueSummary(LiveAware):
     total_teams: int

@@ -58,6 +58,25 @@ function sections(): Element[] {
 }
 
 describe('DailyRecapShareCard', () => {
+  it('puts the games and the teams that played under the date', () => {
+    const { rerender } = render(<DailyRecapShareCard dark={false} subtitle="Nov 24, 2026" recap={recap} />)
+    expect(document.querySelector('.drc-night')).toBeNull()
+    expect(document.querySelector('.drc-foot')).toHaveTextContent('Averages, rankings, last 1 day')
+    expect(document.querySelector('.drc-foot')).not.toHaveTextContent('teams that played')
+
+    rerender(
+      <DailyRecapShareCard
+        dark={false}
+        subtitle="Nov 24, 2026"
+        note="3 games · 11 of 12 fantasy teams played"
+        teamsLeftOut
+        recap={recap}
+      />,
+    )
+    expect(document.querySelector('.drc-night')).toHaveTextContent('3 games · 11 of 12 fantasy teams played')
+    expect(document.querySelector('.drc-foot')).toHaveTextContent('Averages, rankings, last 1 day, teams that played')
+  })
+
   it('lays the ten sections out in five pairs and shows the night', () => {
     render(
       <DailyRecapShareCard

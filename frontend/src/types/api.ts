@@ -49,6 +49,9 @@ export interface LeagueRankings {
   date_range_end?: string;
   actual_start_date?: string;
   actual_end_date?: string;
+  /** Date range only: every team in the league, including any a
+   * played-only request left out of the rankings. */
+  league_team_count?: number;
 }
 
 export interface ShotChartStats {
