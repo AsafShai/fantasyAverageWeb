@@ -101,7 +101,7 @@ describe('Players page', () => {
     const user = userEvent.setup();
     renderWithProviders(<Players />);
     await waitFor(() => expect(screen.getByText('Bench Guy')).toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: /^PG$/ }));
+    await user.click(screen.getByRole('button', { name: /^PG$/ }));
     expect(screen.getAllByText(/showing 1 players/i).length).toBeGreaterThan(0);
     expect(screen.queryByText('Bench Guy')).not.toBeInTheDocument();
   });
@@ -148,7 +148,7 @@ describe('Players page', () => {
 
     expect(screen.queryByText('Alpha Star')).not.toBeInTheDocument();
     expect(screen.getAllByText(/showing 1 players/i).length).toBeGreaterThan(0);
-    expect(screen.getByRole('checkbox', { name: /^C$/ })).toBeChecked();
+    expect(screen.getByRole('button', { name: /^C$/ })).toHaveAttribute('aria-pressed', 'true');
 
     const playersCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls
       .map(([input]) => requestUrl(input as RequestInfo | URL))

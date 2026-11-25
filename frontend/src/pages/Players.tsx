@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
 import { usePersistedState } from '../hooks/usePersistedState';
 import { useDebounce } from '../hooks/useDebounce';
@@ -18,9 +18,10 @@ import type { PlayerMatchup } from '../types/api';
 import TimePeriodSelector from '../components/TimePeriodSelector';
 import { CoverageNotice } from '../components/DateRangePicker';
 import { MatchupCell, MatchupExpandRow } from '../components/MatchupDisplay';
-import { StatsScheduleToggle, ScheduleHorizonToggle, WeekDayHeading, WeekOpponent, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns';
-import { fantasyTeamOptionLabel, leadWithMyTeam } from '../myTeam/display';
+import { WeekDayHeading, WeekOpponent, SCHEDULE_HORIZONS, type PlayerTableMode, type ScheduleHorizon } from '../components/PlayerWeekColumns';
+import { FantasyTeamSelect } from '../components/players/FantasyTeamSelect';
 import { useMyTeam } from '../context/MyTeamContext';
+import { formatShort } from '../utils/dateRange';
 import { easternToday, opponentsByTeamDate, weekGameCount, weekOpponent, weekScheduleDays } from '../utils/slateWindow';
 import InjuryBadge from '../components/InjuryBadge';
 import WaiverClearTag from '../components/WaiverClearTag';
@@ -29,7 +30,9 @@ import { parseStatFilterValue, passesStatFilter } from '../utils/statFilter';
 import { FF_PAST_SLATES } from '../config/featureFlags';
 import './Players.css';
 import { useMobileRedesign } from '../mobile/flag';
+import { Chip, PositionFilter } from '../mobile/ui';
 import MobilePlayers from '../mobile/pages/players/MobilePlayers';
+import '../mobile/pages/playerRankings/playerRankings.css';
 
 const POSITIONS = ['PG', 'SG', 'SF', 'PF', 'C'] as const;
 
@@ -281,113 +284,40 @@ const Players = () => {
   if (isLoading) return <div className="loading">Loading players...</div>;
   if (error) return <div className="error">Error loading players</div>;
 
+  const slateUsable = !!selectedSlateDate && !!playingTeamsOnSlate;
+
   return (
     <div className="players-page">
       <h1>Players</h1>
 
-      <FilterPanel filters={filters} onChange={setFilters} teams={teams} />
-
-      <div className="mt-4 mb-4 flex flex-col gap-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="results-count hidden sm:flex sm:items-center">
-            Showing {filteredPlayers.length} players
-          </div>
-          <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-          <div className="order-2 flex w-full flex-col gap-2 sm:order-1 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
-          <label className="flex w-full items-center gap-2 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none sm:w-auto sm:gap-1" title="Pick a game day. Past dates (debug) show that slate with current player state.">
-            <span className="shrink-0">Slate</span>
-            <select
-              value={slateDate}
-              onChange={(e) => setSlateDate(e.target.value)}
-              className="min-w-0 flex-1 px-2 py-1.5 text-xs border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 sm:flex-none sm:py-1"
-            >
-              <option value="">
-                {slateDate === '' && currentSlateDate
-                  ? `Upcoming (live) — ${currentSlateDate}`
-                  : slateDate === '' && currentSlateDate === null
-                    ? 'Upcoming (live) — no games scheduled'
-                    : 'Upcoming (live)'}
-              </option>
-              {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
-              {FF_PAST_SLATES && pastDates.length > 0 && (
-                <optgroup label="Past (debug)">
-                  {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
-                </optgroup>
-              )}
-            </select>
-          </label>
-          <label
-            className={`group inline-flex h-9 w-full items-center gap-2 rounded-md border px-2 text-xs transition-colors focus-within:ring-2 focus-within:ring-blue-300 sm:h-8 sm:w-auto ${
-              !selectedSlateDate || !playingTeamsOnSlate
-                ? 'cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500'
-                : playingOnSlateOnly
-                  ? 'cursor-pointer border-blue-600 bg-blue-50 text-blue-900 shadow-sm dark:border-blue-400 dark:bg-blue-950 dark:text-blue-100'
-                  : 'cursor-pointer border-gray-300 bg-white text-gray-700 hover:border-blue-300 hover:bg-blue-50/40 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:bg-gray-700'
-            }`}
-            title="Keep only players whose NBA team plays on the selected slate."
-          >
-            <input
-              className="sr-only"
-              type="checkbox"
-              checked={playingOnSlateOnly}
-              disabled={!selectedSlateDate || !playingTeamsOnSlate}
-              onChange={(e) => setPlayingOnSlateOnly(e.target.checked)}
-            />
-            <span
-              aria-hidden="true"
-              className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${
-                !selectedSlateDate || !playingTeamsOnSlate
-                  ? 'bg-gray-300 dark:bg-gray-600'
-                  : playingOnSlateOnly
-                    ? 'bg-blue-600'
-                    : 'bg-gray-300 dark:bg-gray-600'
-              }`}
-            >
-              <span className={`absolute left-0.5 top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-transform ${playingOnSlateOnly ? 'translate-x-[14px]' : ''}`} />
-            </span>
-            <span className="whitespace-nowrap font-medium">Only playing on slate</span>
-          </label>
-          <label className="hidden sm:flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300 cursor-pointer select-none">
-            <input type="checkbox" checked={integerMode} onChange={(e) => setIntegerMode(e.target.checked)} />
-            Integer projections
-          </label>
-          </div>
-          <div className="order-1 flex w-full flex-col gap-2 sm:order-2 sm:w-auto sm:flex-row sm:items-center">
-          <div className="w-full sm:order-2 sm:w-auto">
-            <StatsScheduleToggle mode={tableMode} onChange={setTableMode} />
-          </div>
-          {tableMode !== 'schedule' && (
-            <div className="flex w-full self-start overflow-hidden rounded border border-gray-300 sm:order-1 sm:w-auto dark:border-gray-600">
-              <button
-                className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 border-r border-gray-300 dark:border-gray-600 sm:flex-none ${showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                onClick={() => setShowAverages(true)}
-              >
-                Per Game
-              </button>
-              <button
-                className={`flex-1 px-3 py-1.5 text-sm whitespace-nowrap transition-all duration-200 sm:flex-none ${!showAverages ? 'bg-blue-600 text-white font-medium' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
-                onClick={() => setShowAverages(false)}
-              >
-                Totals
-              </button>
-            </div>
-          )}
-          </div>
-          </div>
-        </div>
-        {tableMode === 'schedule' ? (
-          <div className="w-full sm:flex sm:justify-end">
-            <ScheduleHorizonToggle value={scheduleHorizon} onChange={setScheduleHorizon} />
-          </div>
-        ) : (
-          <div className="w-full sm:flex sm:justify-end">
-            <TimePeriodSelector value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
-          </div>
-        )}
-      </div>
-      <div className="results-count sm:hidden mb-2">
-        Showing {filteredPlayers.length} players
-      </div>
+      <PlayersFilterCard
+        filters={filters}
+        onChange={setFilters}
+        teams={teams}
+        tableMode={tableMode}
+        setTableMode={setTableMode}
+        showAverages={showAverages}
+        setShowAverages={setShowAverages}
+        timePeriod={timePeriod}
+        setTimePeriod={setTimePeriod}
+        customRange={customRange}
+        setCustomRange={setCustomRange}
+        scheduleHorizon={scheduleHorizon}
+        setScheduleHorizon={setScheduleHorizon}
+        slateDate={slateDate}
+        setSlateDate={setSlateDate}
+        upcomingDates={upcomingDates}
+        pastDates={pastDates}
+        currentSlateDate={currentSlateDate}
+        slateUsable={slateUsable}
+        playingOnSlateOnly={playingOnSlateOnly}
+        setPlayingOnSlateOnly={setPlayingOnSlateOnly}
+        integerMode={integerMode}
+        setIntegerMode={setIntegerMode}
+        actualStart={data?.actual_start}
+        actualEnd={data?.actual_end}
+        resultCount={filteredPlayers.length}
+      />
 
       {tableMode !== 'schedule' && timePeriod === 'custom' && customRange && (
         <CoverageNotice
@@ -415,7 +345,63 @@ const Players = () => {
   );
 };
 
-const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onChange: (filters: PlayerFilters) => void; teams?: Array<{ team_id: number; team_name: string }> }) => {
+interface PlayersFilterCardProps {
+  filters: PlayerFilters
+  onChange: (filters: PlayerFilters) => void
+  teams?: Array<{ team_id: number; team_name: string }>
+  tableMode: PlayerTableMode
+  setTableMode: (mode: PlayerTableMode) => void
+  showAverages: boolean
+  setShowAverages: (value: boolean) => void
+  timePeriod: TimePeriod
+  setTimePeriod: (period: TimePeriod) => void
+  customRange: CustomDateRange | null
+  setCustomRange: (range: CustomDateRange | null) => void
+  scheduleHorizon: ScheduleHorizon
+  setScheduleHorizon: (horizon: ScheduleHorizon) => void
+  slateDate: string
+  setSlateDate: (date: string) => void
+  upcomingDates: string[]
+  pastDates: string[]
+  currentSlateDate: string | null | undefined
+  slateUsable: boolean
+  playingOnSlateOnly: boolean
+  setPlayingOnSlateOnly: (value: boolean) => void
+  integerMode: boolean
+  setIntegerMode: (value: boolean) => void
+  actualStart?: string
+  actualEnd?: string
+  resultCount: number
+}
+
+const PlayersFilterCard = ({
+  filters,
+  onChange,
+  teams,
+  tableMode,
+  setTableMode,
+  showAverages,
+  setShowAverages,
+  timePeriod,
+  setTimePeriod,
+  customRange,
+  setCustomRange,
+  scheduleHorizon,
+  setScheduleHorizon,
+  slateDate,
+  setSlateDate,
+  upcomingDates,
+  pastDates,
+  currentSlateDate,
+  slateUsable,
+  playingOnSlateOnly,
+  setPlayingOnSlateOnly,
+  integerMode,
+  setIntegerMode,
+  actualStart,
+  actualEnd,
+  resultCount,
+}: PlayersFilterCardProps) => {
   const { myTeamId, isMyTeam } = useMyTeam()
   const [statFilter, setStatFilter] = useState<Partial<Omit<StatFilter, 'value'>>>({});
   // Kept as typed, so a 0 shows and an emptied box is not NaN.
@@ -439,146 +425,270 @@ const FilterPanel = ({ filters, onChange, teams }: { filters: PlayerFilters; onC
     onChange({ ...filters, stat_filters: newFilters });
   };
 
+  const toggleStatus = (status: string) => {
+    const current = filters.status ?? [];
+    const next = current.includes(status) ? current.filter((item) => item !== status) : [...current, status];
+    onChange({ ...filters, status: next });
+  };
+
+  const resetFilters = () => {
+    onChange({ search: '', positions: [], status: [], team_id: null, stat_filters: [] });
+    setStatFilter({});
+    setValueText('');
+  };
+
+  const teamId = filters.team_id === undefined ? null : filters.team_id;
+
   return (
-    <div className="filter-panel">
-      <input
-        type="text"
-        placeholder="Search players..."
-        value={filters.search || ''}
-        onChange={(e) => onChange({ ...filters, search: e.target.value })}
-        className="search-input"
-      />
+    <section className="pr-filters mr-root" aria-label="Player filters">
+      <div className="pr-rank">
+        <div className="pr-mode">
+          <span className="pr-label">View</span>
+          <div className="mr-seg mr-sm mr-fit mr-pr-calc" role="group" aria-label="View">
+            <button type="button" className="mr-seg-btn" aria-pressed={tableMode === 'stats'} onClick={() => setTableMode('stats')}>Stats</button>
+            <button type="button" className="mr-seg-btn" aria-pressed={tableMode === 'schedule'} onClick={() => setTableMode('schedule')}>Schedule</button>
+          </div>
+        </div>
+        {tableMode !== 'schedule' && (
+          <div className="pr-mode">
+            <span className="pr-label">Display</span>
+            <div className="mr-seg mr-sm mr-fit mr-pr-disp" role="group" aria-label="Display">
+              <button type="button" className="mr-seg-btn" aria-pressed={showAverages} onClick={() => setShowAverages(true)}>Per Game</button>
+              <button type="button" className="mr-seg-btn" aria-pressed={!showAverages} onClick={() => setShowAverages(false)}>Totals</button>
+            </div>
+          </div>
+        )}
+        <button type="button" className="pr-reset" onClick={resetFilters}>Reset</button>
+      </div>
 
-      <div className="filter-group">
-        <label>Position:</label>
-        <div className="checkbox-group">
-          {POSITIONS.map(pos => (
-            <label key={pos}>
-              <input
-                type="checkbox"
-                checked={filters.positions?.includes(pos) || false}
-                onChange={(e) => {
-                  const positions = e.target.checked
-                    ? [...(filters.positions || []), pos]
-                    : (filters.positions || []).filter(p => p !== pos);
-                  onChange({ ...filters, positions });
-                }}
-              />
-              {pos}
-            </label>
-          ))}
+      <div className="pr-block">
+        <span className="pr-label">{tableMode === 'schedule' ? 'Horizon' : 'Period'}</span>
+        <div className="pr-period-line">
+          {tableMode === 'schedule' ? (
+            <div className="pr-period" role="group" aria-label="Schedule horizon">
+              {SCHEDULE_HORIZONS.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  aria-pressed={scheduleHorizon === days}
+                  className={`pr-period-btn${scheduleHorizon === days ? ' pr-period-on' : ''}`}
+                  onClick={() => setScheduleHorizon(days)}
+                >
+                  {days} days
+                </button>
+              ))}
+            </div>
+          ) : (
+            <TimePeriodSelector appearance="plain" value={timePeriod} onChange={setTimePeriod} customRange={customRange} onCustomRangeChange={setCustomRange} />
+          )}
+          {tableMode !== 'schedule' && actualStart && actualEnd && (
+            <p className="pr-range">
+              Showing {actualStart === actualEnd ? formatShort(actualStart) : `${formatShort(actualStart)} – ${formatShort(actualEnd)}`}
+            </p>
+          )}
         </div>
       </div>
 
-      <div className="filter-group">
-        <label>Status:</label>
-        <div className="checkbox-group">
-          {STATUS_OPTIONS.map(status => (
-            <label key={status.value}>
-              <input
-                type="checkbox"
-                checked={filters.status?.includes(status.value) || false}
-                onChange={(e) => {
-                  const statuses = e.target.checked
-                    ? [...(filters.status || []), status.value]
-                    : (filters.status || []).filter(s => s !== status.value);
-                  onChange({ ...filters, status: statuses });
-                }}
-              />
-              {status.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div className="filter-group">
-        <label>Fantasy Team:</label>
-        <select
-          value={filters.team_id === null || filters.team_id === undefined ? '' : filters.team_id}
-          onChange={(e) => {
-            const value = e.target.value;
-            onChange({
-              ...filters,
-              team_id: value === '' ? null : (value === '0' ? 0 : parseInt(value))
-            });
-          }}
-          className="team-select"
-        >
-          <option value="">All Teams</option>
-          <option value="0">Free Agents / Waivers</option>
-          {leadWithMyTeam(teams ?? [], myTeamId).map(team => (
-            <option key={team.team_id} value={team.team_id}>
-              {fantasyTeamOptionLabel(team.team_name, isMyTeam(team.team_id))}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="stat-filter-builder">
-        <select
-          value={statFilter.stat || ''}
-          onChange={(e) => {
-            const v = e.target.value
-            setStatFilter({
-              ...statFilter,
-              stat: v === '' ? undefined : (v as PlayerStatKey),
-            })
-          }}
-        >
-          <option value="">Filter by stat</option>
-          <option value="minutes">Minutes</option>
-          <option value="pts">PTS</option>
-          <option value="reb">REB</option>
-          <option value="ast">AST</option>
-          <option value="stl">STL</option>
-          <option value="blk">BLK</option>
-          <option value="fg_percentage">FG%</option>
-          <option value="ft_percentage">FT%</option>
-          <option value="three_pm">3PM</option>
-        </select>
-
-        <select
-          value={statFilter.operator || ''}
-          onChange={(e) => {
-            const v = e.target.value
-            setStatFilter({
-              ...statFilter,
-              operator: v === '' ? undefined : (v as ComparisonOperator),
-            })
-          }}
-        >
-          <option value="">Select operator</option>
-          <option value="eq">=</option>
-          <option value="gt">&gt;</option>
-          <option value="gte">&gt;=</option>
-          <option value="lt">&lt;</option>
-          <option value="lte">&lt;=</option>
-        </select>
-
-        <input
-          type="number"
-          step="0.1"
-          placeholder="Value"
-          value={valueText}
-          onChange={(e) => setValueText(e.target.value)}
+      <div className="pr-players">
+        <PositionFilter
+          options={POSITIONS}
+          selected={filters.positions ?? []}
+          onChange={(positions) => onChange({ ...filters, positions })}
         />
+        <div className="pr-field">
+          <span className="pr-label">Status</span>
+          <div className="mr-chips mr-wrap" role="group" aria-label="Status">
+            {STATUS_OPTIONS.map((status) => (
+              <Chip
+                key={status.value}
+                selected={filters.status?.includes(status.value) || false}
+                onClick={() => toggleStatus(status.value)}
+              >
+                {status.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+        <div className="pr-fantasy-menu">
+          <span className="pr-label">Fantasy team</span>
+          <FantasyTeamSelect
+            value={teamId}
+            onChange={(next) => onChange({ ...filters, team_id: next })}
+            teams={teams ?? []}
+            myTeamId={myTeamId}
+            isMyTeam={isMyTeam}
+          />
+        </div>
+        <label className="pr-field" title="Pick a game day. Past dates (debug) show that slate with current player state.">
+          <span className="pr-label">Slate</span>
+          <select
+            aria-label="Slate"
+            value={slateDate}
+            onChange={(e) => setSlateDate(e.target.value)}
+            className="pl-select"
+          >
+            <option value="">
+              {slateDate === '' && currentSlateDate
+                ? `Upcoming (live) — ${currentSlateDate}`
+                : slateDate === '' && currentSlateDate === null
+                  ? 'Upcoming (live) — no games scheduled'
+                  : 'Upcoming (live)'}
+            </option>
+            {upcomingDates.map((d) => <option key={d} value={d}>{d}</option>)}
+            {FF_PAST_SLATES && pastDates.length > 0 && (
+              <optgroup label="Past (debug)">
+                {pastDates.map((d) => <option key={d} value={d}>{d}</option>)}
+              </optgroup>
+            )}
+          </select>
+        </label>
+        <div className="pr-field">
+          <span className="pr-label">Playing</span>
+          <button
+            type="button"
+            className="mr-chip"
+            aria-pressed={playingOnSlateOnly}
+            disabled={!slateUsable}
+            title="Keep only players whose NBA team plays on the selected slate."
+            onClick={() => setPlayingOnSlateOnly(!playingOnSlateOnly)}
+          >
+            Only playing on slate
+          </button>
+        </div>
+        <div className="pr-field">
+          <span className="pr-label">Projections</span>
+          <button
+            type="button"
+            className="mr-chip"
+            aria-pressed={integerMode}
+            onClick={() => setIntegerMode(!integerMode)}
+          >
+            Integer projections
+          </button>
+        </div>
+      </div>
 
-        <button onClick={addStatFilter} disabled={!canAddFilter}>Add Filter</button>
+      <div className="pr-stat">
+        <label className="pr-field">
+          <span className="pr-label">Stat</span>
+          <select
+            aria-label="Filter by stat"
+            className="pl-select"
+            value={statFilter.stat || ''}
+            onChange={(e) => {
+              const v = e.target.value
+              setStatFilter({ ...statFilter, stat: v === '' ? undefined : (v as PlayerStatKey) })
+            }}
+          >
+            <option value="">Filter by stat</option>
+            <option value="minutes">Minutes</option>
+            <option value="pts">PTS</option>
+            <option value="reb">REB</option>
+            <option value="ast">AST</option>
+            <option value="stl">STL</option>
+            <option value="blk">BLK</option>
+            <option value="fg_percentage">FG%</option>
+            <option value="ft_percentage">FT%</option>
+            <option value="three_pm">3PM</option>
+          </select>
+        </label>
+        <label className="pr-field">
+          <span className="pr-label">Operator</span>
+          <select
+            aria-label="Operator"
+            className="pl-select"
+            value={statFilter.operator || ''}
+            onChange={(e) => {
+              const v = e.target.value
+              setStatFilter({ ...statFilter, operator: v === '' ? undefined : (v as ComparisonOperator) })
+            }}
+          >
+            <option value="">Select operator</option>
+            <option value="eq">=</option>
+            <option value="gt">&gt;</option>
+            <option value="gte">&gt;=</option>
+            <option value="lt">&lt;</option>
+            <option value="lte">&lt;=</option>
+          </select>
+        </label>
+        <label className="pr-field">
+          <span className="pr-label">Value</span>
+          <input
+            type="number"
+            step="0.1"
+            placeholder="Value"
+            aria-label="Value"
+            value={valueText}
+            onChange={(e) => setValueText(e.target.value)}
+            className="pr-num pl-value"
+          />
+        </label>
+        <button type="button" className="pl-add" onClick={addStatFilter} disabled={!canAddFilter}>Add Filter</button>
       </div>
 
       {filters.stat_filters && filters.stat_filters.length > 0 && (
-        <div className="active-filters">
+        <div className="pl-chips">
           {filters.stat_filters.map((filter, idx) => (
-            <div key={idx} className="filter-chip">
+            <Chip key={`${filter.stat}-${filter.operator}-${filter.value}-${idx}`} removable onClick={() => removeStatFilter(idx)}>
               {filter.stat.toUpperCase()} {OPERATOR_LABELS[filter.operator]} {filter.value}
-              <button onClick={() => removeStatFilter(idx)}>×</button>
-            </div>
+            </Chip>
           ))}
         </div>
       )}
-    </div>
+
+      <PlayerSearchBox
+        value={filters.search || ''}
+        onChange={(search) => onChange({ ...filters, search })}
+        note={`Showing ${resultCount} players`}
+      />
+    </section>
   );
 };
+
+function PlayerSearchBox({ value, onChange, note }: { value: string; onChange: (value: string) => void; note: string }) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  return (
+    <div className="pr-top-search">
+      <div className="pr-search relative w-full">
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400"
+        >
+          <path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 1 0 3.4 9.83l3.64 3.63a.75.75 0 1 0 1.06-1.06l-3.63-3.64A5.5 5.5 0 0 0 9 3.5ZM5 9a4 4 0 1 1 8 0 4 4 0 0 1-8 0Z" clipRule="evenodd" />
+        </svg>
+        <input
+          ref={inputRef}
+          type="search"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
+          spellCheck={false}
+          aria-label="Search players"
+          placeholder="Search players..."
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Escape') onChange('') }}
+          className="w-full pl-9 pr-9 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 [&::-webkit-search-cancel-button]:hidden"
+        />
+        {value && (
+          <button
+            type="button"
+            aria-label="Clear search"
+            onClick={() => { onChange(''); inputRef.current?.focus() }}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-200 dark:hover:bg-gray-700"
+          >
+            <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+              <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <p className="pr-search-note">{note}</p>
+    </div>
+  )
+}
 
 const PlayerTable = ({
   players,
