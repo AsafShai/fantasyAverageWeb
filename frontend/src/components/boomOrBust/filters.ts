@@ -1,4 +1,4 @@
-import type { SurpriseRow } from '../../types/api';
+import type { SurpriseRow, Team } from '../../types/api';
 
 export type LineupFilter = 'all' | 'started' | 'benched';
 
@@ -6,7 +6,7 @@ export type LineupFilter = 'all' | 'started' | 'benched';
 export const FREE_AGENTS = '__free_agents__';
 
 export interface SurpriseFilters {
-  /** Fantasy team code that night, FREE_AGENTS, or '' for everyone. */
+  /** Fantasy team id that night (as text), FREE_AGENTS, or '' for everyone. */
   fantasyTeam: string;
   /** NBA team that night, or '' for every team. */
   nbaTeam: string;
@@ -26,15 +26,29 @@ export function lineupApplies(filters: SurpriseFilters): boolean {
   return filters.fantasyTeam !== '' && filters.fantasyTeam !== FREE_AGENTS;
 }
 
+/** A row's fantasy team as the filter knows it: the team id. A row from a
+ * server that does not send the id yet is matched through its code. */
+function teamKey(row: SurpriseRow, idByCode: Map<string, string>): string | null {
+  if (row.fantasy_team_id != null) return String(row.fantasy_team_id);
+  if (row.fantasy_team == null) return null;
+  return idByCode.get(row.fantasy_team) ?? row.fantasy_team;
+}
+
+function idsByCode(leagueTeams: Team[]): Map<string, string> {
+  return new Map(leagueTeams.filter((team) => team.abbrev).map((team) => [team.abbrev as string, String(team.team_id)]));
+}
+
 /** Each row carries the teams of its own night, so a player who moved later
  * still counts for the teams he was on when he played. */
-export function applyFilters(rows: SurpriseRow[], filters: SurpriseFilters): SurpriseRow[] {
+export function applyFilters(rows: SurpriseRow[], filters: SurpriseFilters, leagueTeams: Team[] = []): SurpriseRow[] {
   const lineup = lineupApplies(filters) ? filters.lineup : 'all';
   if (filters.fantasyTeam === '' && filters.nbaTeam === '') return rows;
+  const idByCode = idsByCode(leagueTeams);
   return rows.filter((row) => {
     if (filters.nbaTeam !== '' && row.team_abbr !== filters.nbaTeam) return false;
-    if (filters.fantasyTeam === FREE_AGENTS) return row.fantasy_team == null;
-    if (filters.fantasyTeam !== '' && row.fantasy_team !== filters.fantasyTeam) return false;
+    const team = teamKey(row, idByCode);
+    if (filters.fantasyTeam === FREE_AGENTS) return team == null;
+    if (filters.fantasyTeam !== '' && team !== filters.fantasyTeam) return false;
     if (lineup === 'started') return row.started === true;
     // Bench and IR alike: on the team, not in a spot that counted.
     if (lineup === 'benched') return row.started === false;
@@ -42,19 +56,25 @@ export function applyFilters(rows: SurpriseRow[], filters: SurpriseFilters): Sur
   });
 }
 
-/** The teams in the rows on screen, by name. A picked team stays in its list
+/** Every fantasy team in the league, by name, whether or not it has a row in
+ * the period on screen: the list is the same on a quiet night and over the
+ * season. NBA teams are the ones in the rows; a picked one stays in its list
  * when the period changes and it has no rows there. */
 export function filterOptions(
   rows: SurpriseRow[],
   filters: SurpriseFilters,
+  leagueTeams: Team[] = [],
 ): { fantasyTeams: FilterOption[]; nbaTeams: FilterOption[] } {
   const fantasy = new Map<string, string>();
   const nba = new Set<string>();
-  let freeAgents = false;
+  let freeAgents = leagueTeams.length > 0;
+  const idByCode = idsByCode(leagueTeams);
+  for (const team of leagueTeams) fantasy.set(String(team.team_id), team.team_name);
   for (const row of rows) {
     if (row.team_abbr) nba.add(row.team_abbr);
-    if (row.fantasy_team == null) freeAgents = true;
-    else if (!fantasy.has(row.fantasy_team)) fantasy.set(row.fantasy_team, row.fantasy_team_name || row.fantasy_team);
+    const team = teamKey(row, idByCode);
+    if (team == null) freeAgents = true;
+    else if (!fantasy.has(team)) fantasy.set(team, row.fantasy_team_name || row.fantasy_team || team);
   }
   if (lineupApplies(filters) && !fantasy.has(filters.fantasyTeam)) fantasy.set(filters.fantasyTeam, filters.fantasyTeam);
   if (filters.nbaTeam !== '') nba.add(filters.nbaTeam);

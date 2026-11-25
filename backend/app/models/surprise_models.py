@@ -39,6 +39,8 @@ class SurpriseRow(BaseModel):
     reasons: list[SurpriseReason]
     # Where he was in the league that night: fantasy team abbrev (None = free
     # agent), the lineup slot, and whether that slot counted (not BE / IR).
+    # The team's id, the stable key: a code or a name can change mid-season.
+    fantasy_team_id: Optional[int] = None
     fantasy_team: Optional[str] = None
     # The team's current full name ("Trust the process"); the code when unknown.
     fantasy_team_name: Optional[str] = None

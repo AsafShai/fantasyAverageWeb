@@ -65,6 +65,21 @@ test.describe('phone Boom or Bust', () => {
     await shots(page, 'bob-light')
   })
 
+  test('a fantasy team: its lineup control fits the screen', async ({ page }) => {
+    await openBob(page)
+    await page.getByRole('button', { name: 'Fantasy team: All fantasy teams' }).click()
+    await page.getByRole('option', { name: 'HY team' }).click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(1)')
+    const benched = page.getByRole('radiogroup', { name: 'Lineup' }).getByText('Benched')
+    await expect(benched).toBeInViewport({ ratio: 1 })
+    await expectNoHorizontalScroll(page)
+    await benched.click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(0)')
+    await page.getByRole('button', { name: 'Clear' }).click()
+    await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(3)')
+    await shots(page, 'bob-team')
+  })
+
   test('previous night button', async ({ page }) => {
     await openBob(page)
     await page.getByRole('button', { name: 'Previous night' }).click()

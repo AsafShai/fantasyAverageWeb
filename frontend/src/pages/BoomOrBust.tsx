@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useGetLatestSurprisesQuery, useGetSurprisesForDateQuery, useGetSurprisesForPeriodQuery, useGetSurpriseDatesQuery } from '../store/api/fantasyApi';
+import { useGetLatestSurprisesQuery, useGetSurprisesForDateQuery, useGetSurprisesForPeriodQuery, useGetSurpriseDatesQuery, useGetTeamsListQuery } from '../store/api/fantasyApi';
 import type { NightSurprises, PeriodSurprises, SurpriseRow } from '../types/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
@@ -269,14 +269,21 @@ function TeamFilters({
   const active = filters.fantasyTeam !== '' || filters.nbaTeam !== '';
   if (mobile) {
     return (
-      <div className="mr-frow">
-        <SelectSheet id="bob-fantasy" label="Fantasy team" value={filters.fantasyTeam} onChange={setFantasy}
-          options={[{ value: '', label: 'All fantasy teams' }, ...fantasyTeams]} />
-        <SelectSheet id="bob-nba" label="NBA team" value={filters.nbaTeam} onChange={setNba}
-          options={[{ value: '', label: 'All NBA teams' }, ...nbaTeams]} />
-        {showLineup && <Segmented size="sm" label="Lineup" options={LINEUPS} value={filters.lineup} onChange={setLineup} />}
-        {active && <Button size="sm" onClick={() => onChange(NO_FILTERS)}>Clear</Button>}
-      </div>
+      <>
+        <div className="mr-frow">
+          <SelectSheet id="bob-fantasy" label="Fantasy team" value={filters.fantasyTeam} onChange={setFantasy}
+            options={[{ value: '', label: 'All fantasy teams' }, ...fantasyTeams]} />
+          <SelectSheet id="bob-nba" label="NBA team" value={filters.nbaTeam} onChange={setNba}
+            options={[{ value: '', label: 'All NBA teams' }, ...nbaTeams]} />
+        </div>
+        {/* Its own row: beside the two pickers the control ran off the screen. */}
+        {active && (
+          <div className="mr-frow mr-bob-lineup">
+            {showLineup && <Segmented size="sm" label="Lineup" options={LINEUPS} value={filters.lineup} onChange={setLineup} />}
+            <Button size="sm" onClick={() => onChange(NO_FILTERS)}>Clear</Button>
+          </div>
+        )}
+      </>
     );
   }
   return (
@@ -326,8 +333,9 @@ const shareUrl = () => `${window.location.origin}/boom-or-bust`;
 function NightBody({ night, isLatest, filters, filtered }: { night: NightSurprises; isLatest: boolean } & FilterProps) {
   const good = useThreshold('good');
   const bad = useThreshold('bad');
-  const booms = useMemo(() => shownRows(applyFilters(night.good, filters), 'good', good.value), [night, filters, good.value]);
-  const busts = useMemo(() => shownRows(applyFilters(night.bad, filters), 'bad', bad.value), [night, filters, bad.value]);
+  const { data: leagueTeams } = useGetTeamsListQuery();
+  const booms = useMemo(() => shownRows(applyFilters(night.good, filters, leagueTeams), 'good', good.value), [night, filters, leagueTeams, good.value]);
+  const busts = useMemo(() => shownRows(applyFilters(night.bad, filters, leagueTeams), 'bad', bad.value), [night, filters, leagueTeams, bad.value]);
   const dateLabel = fmtDay(night.game_date, false);
   const shareText = useMemo(
     () => buildShareMessage(dateLabel, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), shareUrl()),
@@ -373,8 +381,9 @@ function PeriodBody({ start, end, kicker, filters, filtered }: { start: string; 
   const period: PeriodSurprises | undefined = data && data.start === start && data.end === end ? data : undefined;
   const good = useThreshold('good');
   const bad = useThreshold('bad');
-  const booms = useMemo(() => (period ? shownRows(applyFilters(period.good, filters), 'good', good.value) : []), [period, filters, good.value]);
-  const busts = useMemo(() => (period ? shownRows(applyFilters(period.bad, filters), 'bad', bad.value) : []), [period, filters, bad.value]);
+  const { data: leagueTeams } = useGetTeamsListQuery();
+  const booms = useMemo(() => (period ? shownRows(applyFilters(period.good, filters, leagueTeams), 'good', good.value) : []), [period, filters, leagueTeams, good.value]);
+  const busts = useMemo(() => (period ? shownRows(applyFilters(period.bad, filters, leagueTeams), 'bad', bad.value) : []), [period, filters, leagueTeams, bad.value]);
   const label = fmtRange(start, end);
   const shareText = useMemo(
     () => buildShareMessage(label, booms.slice(0, SHARE_ROWS), busts.slice(0, SHARE_ROWS), shareUrl()),
@@ -481,10 +490,11 @@ export default function BoomOrBust() {
     { start: range?.start ?? '', end: range?.end ?? '', minScore: SLIDER_MIN },
     { skip: !isPeriod || !range },
   ).currentData;
+  const { data: leagueTeams } = useGetTeamsListQuery();
   const options = useMemo(() => {
     const source = isPeriod ? periodRows : night;
-    return filterOptions(source ? [...source.good, ...source.bad] : [], filters);
-  }, [isPeriod, periodRows, night, filters]);
+    return filterOptions(source ? [...source.good, ...source.bad] : [], filters, leagueTeams);
+  }, [isPeriod, periodRows, night, filters, leagueTeams]);
   const filtered = filtersLabel(filters, options.fantasyTeams);
   const teamFilters = (
     <TeamFilters filters={filters} onChange={setFilters} fantasyTeams={options.fantasyTeams} nbaTeams={options.nbaTeams} />

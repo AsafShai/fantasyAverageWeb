@@ -62,6 +62,50 @@ describe('filterOptions', () => {
   })
 })
 
+describe('filterOptions with the league', () => {
+  const league = [
+    { team_id: 8, team_name: "Dor's Injured Team", abbrev: 'DIT' },
+    { team_id: 4, team_name: 'DORELIT', abbrev: 'DOR' },
+    { team_id: 11, team_name: 'Trust the process', abbrev: 'TTP' },
+  ]
+
+  it('lists every league team by name, also one with no row that night', () => {
+    const options = filterOptions(rows.slice(0, 1), NO_FILTERS, league)
+    expect(options.fantasyTeams).toEqual([
+      { value: '8', label: "Dor's Injured Team" },
+      { value: '4', label: 'DORELIT' },
+      { value: '11', label: 'Trust the process' },
+      { value: FREE_AGENTS, label: 'Free agents' },
+    ])
+  })
+
+  it('a picked team with no rows keeps its name, not its code', () => {
+    const options = filterOptions([], { fantasyTeam: '8', nbaTeam: '', lineup: 'all' }, league)
+    expect(options.fantasyTeams.find((team) => team.value === '8')?.label).toBe("Dor's Injured Team")
+  })
+})
+
+describe('the fantasy team is its id', () => {
+  const league = [{ team_id: 11, team_name: 'Process Trusters', abbrev: 'PT' }]
+  const night = [
+    row({ player_id: 1, fantasy_team_id: 11, fantasy_team: 'TTP', fantasy_team_name: 'Trust the process' }),
+    row({ player_id: 2, fantasy_team_id: 11, fantasy_team: 'PT', fantasy_team_name: 'Process Trusters' }),
+    row({ player_id: 3, fantasy_team_id: 4, fantasy_team: 'DOR', fantasy_team_name: 'DORELIT' }),
+  ]
+
+  it('a team that changed its code and name is still one team', () => {
+    const options = filterOptions(night, NO_FILTERS, league)
+    expect(options.fantasyTeams.filter((team) => team.value === '11')).toEqual([{ value: '11', label: 'Process Trusters' }])
+    expect(ids(applyFilters(night, { ...NO_FILTERS, fantasyTeam: '11' }, league))).toEqual([1, 2])
+  })
+
+  it('a row without an id is matched through its code', () => {
+    const old = [row({ player_id: 9, fantasy_team: 'PT', fantasy_team_name: 'Process Trusters' })]
+    expect(ids(applyFilters(old, { ...NO_FILTERS, fantasyTeam: '11' }, league))).toEqual([9])
+    expect(filterOptions(old, NO_FILTERS, league).fantasyTeams.map((team) => team.value)).toEqual(['11', '__free_agents__'])
+  })
+})
+
 describe('filtersLabel', () => {
   it('names what is filtered, and nothing when nothing is', () => {
     const { fantasyTeams } = filterOptions(rows, NO_FILTERS)
