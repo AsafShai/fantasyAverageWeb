@@ -54,7 +54,7 @@ test.describe('phone Boom or Bust', () => {
   test('summary, period chips, both cards with their sliders', async ({ page }) => {
     await openBob(page)
     await expect(page.getByText('52 of 52 players scored · 47 with a model estimate')).toBeVisible()
-    await expect(page.getByRole('group', { name: 'Period' }).getByRole('button')).toHaveText(['Last night', 'Last 7 days', 'Last 30 days', 'Season', 'Custom'])
+    await expect(page.getByRole('group', { name: 'Period' }).getByRole('button')).toHaveText(['📅 Full Season', '🌙 Last night', '🔥 Last 7 Days', '📈 Last 30 Days', '📆 Custom'])
     await expect(page.getByRole('heading', { name: /Booms/ })).toContainText('(3)')
     await expect(page.getByRole('heading', { name: /Busts/ })).toContainText('(2)')
     await expect(page.getByLabel('Surprise threshold')).toBeVisible()
