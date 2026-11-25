@@ -10,9 +10,10 @@ import { buildShareMessage } from '../components/share/boomOrBustMessage';
 import { useMobileRedesign } from '../mobile/flag';
 import { Button, Card, Chip, ChipRow, Segmented, SelectSheet } from '../mobile/ui';
 import {
-  applyFilters, filterOptions, filtersLabel, lineupApplies, NO_FILTERS,
+  anyFilter, applyFilters, filterOptions, filtersLabel, FREE_AGENTS, NO_FILTERS,
   type FilterOption, type LineupFilter, type SurpriseFilters,
 } from '../components/boomOrBust/filters';
+import { useMyTeam } from '../context/MyTeamContext';
 import '../mobile/pages/playerRankings/playerRankings.css';
 import '../mobile/bob/bob.css';
 
@@ -253,8 +254,8 @@ const LINEUPS: { value: LineupFilter; label: string }[] = [
   { value: 'benched', label: 'Benched' },
 ];
 
-/** Who the cards show: one fantasy team, one NBA team, and for a fantasy
- * team its starters or its bench. Teams are the ones of each night. */
+/** Who the cards show: one fantasy team, one NBA team, and starters or the
+ * bench (always there, on All). Teams and spots are the ones of each night. */
 function TeamFilters({
   filters, onChange, fantasyTeams, nbaTeams,
 }: {
@@ -262,11 +263,14 @@ function TeamFilters({
   fantasyTeams: FilterOption[]; nbaTeams: FilterOption[];
 }) {
   const mobile = useMobileRedesign();
-  const setFantasy = (fantasyTeam: string) => onChange({ ...filters, fantasyTeam, lineup: 'all' });
+  // Free agents have no lineup spot, so the two never hold together: picking
+  // one lets go of the other instead of leaving an empty page.
+  const setFantasy = (fantasyTeam: string) =>
+    onChange({ ...filters, fantasyTeam, lineup: fantasyTeam === FREE_AGENTS ? 'all' : filters.lineup });
   const setNba = (nbaTeam: string) => onChange({ ...filters, nbaTeam });
-  const setLineup = (lineup: LineupFilter) => onChange({ ...filters, lineup });
-  const showLineup = lineupApplies(filters);
-  const active = filters.fantasyTeam !== '' || filters.nbaTeam !== '';
+  const setLineup = (lineup: LineupFilter) =>
+    onChange({ ...filters, lineup, fantasyTeam: lineup !== 'all' && filters.fantasyTeam === FREE_AGENTS ? '' : filters.fantasyTeam });
+  const active = anyFilter(filters);
   if (mobile) {
     return (
       <>
@@ -277,12 +281,10 @@ function TeamFilters({
             options={[{ value: '', label: 'All NBA teams' }, ...nbaTeams]} />
         </div>
         {/* Its own row: beside the two pickers the control ran off the screen. */}
-        {active && (
-          <div className="mr-frow mr-bob-lineup">
-            {showLineup && <Segmented size="sm" label="Lineup" options={LINEUPS} value={filters.lineup} onChange={setLineup} />}
-            <Button size="sm" onClick={() => onChange(NO_FILTERS)}>Clear</Button>
-          </div>
-        )}
+        <div className="mr-frow mr-bob-lineup">
+          <Segmented size="sm" label="Lineup" options={LINEUPS} value={filters.lineup} onChange={setLineup} />
+          {active && <Button size="sm" onClick={() => onChange(NO_FILTERS)}>Clear</Button>}
+        </div>
       </>
     );
   }
@@ -302,25 +304,26 @@ function TeamFilters({
           {nbaTeams.map((team) => <option key={team.value} value={team.value}>{team.label}</option>)}
         </select>
       </label>
-      {showLineup && (
-        <div className="pr-block">
-          <span className="pr-label">Lineup</span>
-          <div className="pr-period" role="group" aria-label="Lineup">
-            {LINEUPS.map((option) => (
-              <button key={option.value} type="button" className={`pr-period-btn${filters.lineup === option.value ? ' pr-period-on' : ''}`}
-                aria-pressed={filters.lineup === option.value} onClick={() => setLineup(option.value)}>
-                {option.label}
-              </button>
-            ))}
-          </div>
+      <div className="pr-block">
+        <span className="pr-label">Lineup</span>
+        <div className="pr-period" role="group" aria-label="Lineup">
+          {LINEUPS.map((option) => (
+            <button key={option.value} type="button" className={`pr-period-btn${filters.lineup === option.value ? ' pr-period-on' : ''}`}
+              aria-pressed={filters.lineup === option.value} onClick={() => setLineup(option.value)}>
+              {option.label}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
       {active && <button type="button" className="pr-reset" onClick={() => onChange(NO_FILTERS)}>Clear filters</button>}
     </div>
   );
 }
 
 interface FilterProps {
+  /** The score bars, held by the page: the NBA team list follows them too. */
+  good: Threshold;
+  bad: Threshold;
   filters: SurpriseFilters;
   /** What is filtered, for the share card; null with no filter on. */
   filtered: string | null;
@@ -330,9 +333,7 @@ const filterKey = (filters: SurpriseFilters) => `${filters.fantasyTeam}|${filter
 
 const shareUrl = () => `${window.location.origin}/boom-or-bust`;
 
-function NightBody({ night, isLatest, filters, filtered }: { night: NightSurprises; isLatest: boolean } & FilterProps) {
-  const good = useThreshold('good');
-  const bad = useThreshold('bad');
+function NightBody({ night, isLatest, good, bad, filters, filtered }: { night: NightSurprises; isLatest: boolean } & FilterProps) {
   const { data: leagueTeams } = useGetTeamsListQuery();
   const booms = useMemo(() => shownRows(applyFilters(night.good, filters, leagueTeams), 'good', good.value), [night, filters, leagueTeams, good.value]);
   const busts = useMemo(() => shownRows(applyFilters(night.bad, filters, leagueTeams), 'bad', bad.value), [night, filters, leagueTeams, bad.value]);
@@ -376,11 +377,9 @@ function NightBody({ night, isLatest, filters, filtered }: { night: NightSurpris
  * same score bar as a single night, with the same sliders (and the same
  * remembered values). The server sends every player-night past the sliders'
  * lowest point, so moving a slider filters in place, like a night. */
-function PeriodBody({ start, end, kicker, filters, filtered }: { start: string; end: string; kicker: string } & FilterProps) {
+function PeriodBody({ start, end, kicker, good, bad, filters, filtered }: { start: string; end: string; kicker: string } & FilterProps) {
   const { data, isFetching, error } = useGetSurprisesForPeriodQuery({ start, end, minScore: SLIDER_MIN });
   const period: PeriodSurprises | undefined = data && data.start === start && data.end === end ? data : undefined;
-  const good = useThreshold('good');
-  const bad = useThreshold('bad');
   const { data: leagueTeams } = useGetTeamsListQuery();
   const booms = useMemo(() => (period ? shownRows(applyFilters(period.good, filters, leagueTeams), 'good', good.value) : []), [period, filters, leagueTeams, good.value]);
   const busts = useMemo(() => (period ? shownRows(applyFilters(period.bad, filters, leagueTeams), 'bad', bad.value) : []), [period, filters, leagueTeams, bad.value]);
@@ -491,10 +490,15 @@ export default function BoomOrBust() {
     { skip: !isPeriod || !range },
   ).currentData;
   const { data: leagueTeams } = useGetTeamsListQuery();
+  const { myTeamId } = useMyTeam();
+  const good = useThreshold('good');
+  const bad = useThreshold('bad');
   const options = useMemo(() => {
     const source = isPeriod ? periodRows : night;
-    return filterOptions(source ? [...source.good, ...source.bad] : [], filters, leagueTeams);
-  }, [isPeriod, periodRows, night, filters, leagueTeams]);
+    if (!source) return filterOptions([], filters, { leagueTeams, myTeamId });
+    const pastBars = [...shownRows(source.good, 'good', good.value), ...shownRows(source.bad, 'bad', bad.value)];
+    return filterOptions([...source.good, ...source.bad], filters, { leagueTeams, myTeamId, pastBars });
+  }, [isPeriod, periodRows, night, filters, leagueTeams, myTeamId, good.value, bad.value]);
   const filtered = filtersLabel(filters, options.fantasyTeams);
   const teamFilters = (
     <TeamFilters filters={filters} onChange={setFilters} fantasyTeams={options.fantasyTeams} nbaTeams={options.nbaTeams} />
@@ -530,7 +534,7 @@ export default function BoomOrBust() {
   let body;
   if (isPeriod && range) {
     const kicker = PRESETS.find((p) => p.id === preset)?.kicker ?? 'period';
-    body = <PeriodBody key={`${range.start}_${range.end}`} start={range.start} end={range.end} kicker={kicker} filters={filters} filtered={filtered} />;
+    body = <PeriodBody key={`${range.start}_${range.end}`} start={range.start} end={range.end} kicker={kicker} good={good} bad={bad} filters={filters} filtered={filtered} />;
   } else if (isLoading || (isFetching && !night)) {
     body = <LoadingSpinner />;
   } else if (error && isNotFound(error)) {
@@ -542,7 +546,7 @@ export default function BoomOrBust() {
   } else if (error || !night) {
     body = <ErrorMessage message="Failed to load last night's surprises." />;
   } else {
-    body = <NightBody key={night.game_date} night={night} isLatest={night.game_date === latestDate} filters={filters} filtered={filtered} />;
+    body = <NightBody key={night.game_date} night={night} isLatest={night.game_date === latestDate} good={good} bad={bad} filters={filters} filtered={filtered} />;
   }
 
   let subtitle = 'Surprises and disappointments of the last NBA night.';
