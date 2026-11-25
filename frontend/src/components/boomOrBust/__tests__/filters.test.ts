@@ -59,7 +59,8 @@ describe('filterOptions', () => {
   it('keeps a picked team that has no rows in this period', () => {
     const options = filterOptions(rows.slice(0, 1), { fantasyTeam: 'ASA', nbaTeam: 'MIA', lineup: 'all' })
     expect(options.fantasyTeams.map((team) => team.value)).toEqual(['ASA', 'TTP'])
-    expect(options.nbaTeams.map((team) => team.value)).toEqual(['BOS', 'MIA'])
+    // the NBA list follows the fantasy team picked: it has nothing here, so only the picked NBA team stays
+    expect(options.nbaTeams.map((team) => team.value)).toEqual(['MIA'])
   })
 })
 
@@ -71,7 +72,7 @@ describe('filterOptions with the league', () => {
   ]
 
   it('lists every league team by name, also one with no row that night', () => {
-    const options = filterOptions(rows.slice(0, 1), NO_FILTERS, league)
+    const options = filterOptions(rows.slice(0, 1), NO_FILTERS, { leagueTeams: league })
     expect(options.fantasyTeams).toEqual([
       { value: '8', label: "Dor's Injured Team" },
       { value: '4', label: 'DORELIT' },
@@ -81,7 +82,7 @@ describe('filterOptions with the league', () => {
   })
 
   it('a picked team with no rows keeps its name, not its code', () => {
-    const options = filterOptions([], { fantasyTeam: '8', nbaTeam: '', lineup: 'all' }, league)
+    const options = filterOptions([], { fantasyTeam: '8', nbaTeam: '', lineup: 'all' }, { leagueTeams: league })
     expect(options.fantasyTeams.find((team) => team.value === '8')?.label).toBe("Dor's Injured Team")
   })
 })
@@ -95,7 +96,7 @@ describe('the fantasy team is its id', () => {
   ]
 
   it('a team that changed its code and name is still one team', () => {
-    const options = filterOptions(night, NO_FILTERS, league)
+    const options = filterOptions(night, NO_FILTERS, { leagueTeams: league })
     expect(options.fantasyTeams.filter((team) => team.value === '11')).toEqual([{ value: '11', label: 'Process Trusters' }])
     expect(ids(applyFilters(night, { ...NO_FILTERS, fantasyTeam: '11' }, league))).toEqual([1, 2])
   })
@@ -103,7 +104,34 @@ describe('the fantasy team is its id', () => {
   it('a row without an id is matched through its code', () => {
     const old = [row({ player_id: 9, fantasy_team: 'PT', fantasy_team_name: 'Process Trusters' })]
     expect(ids(applyFilters(old, { ...NO_FILTERS, fantasyTeam: '11' }, league))).toEqual([9])
-    expect(filterOptions(old, NO_FILTERS, league).fantasyTeams.map((team) => team.value)).toEqual(['11', '__free_agents__'])
+    expect(filterOptions(old, NO_FILTERS, { leagueTeams: league }).fantasyTeams.map((team) => team.value)).toEqual(['11', '__free_agents__'])
+  })
+})
+
+describe('filterOptions: my team first, NBA teams with something to show', () => {
+  const league = [
+    { team_id: 4, team_name: 'DORELIT', abbrev: 'DOR' },
+    { team_id: 11, team_name: 'Trust the process', abbrev: 'TTP' },
+  ]
+
+  it('leads with the viewer\'s own team', () => {
+    const options = filterOptions(rows, NO_FILTERS, { leagueTeams: league, myTeamId: 11 })
+    expect(options.fantasyTeams.slice(0, 2)).toEqual([
+      { value: '11', label: 'Trust the process (My Team)' },
+      { value: '4', label: 'DORELIT' },
+    ])
+  })
+
+  it('lists only NBA teams with a boom or bust past the bars', () => {
+    const pastBars = rows.filter((r) => r.team_abbr !== 'DET')
+    expect(filterOptions(rows, NO_FILTERS, { pastBars }).nbaTeams.map((team) => team.value)).toEqual(['BOS', 'DAL'])
+  })
+
+  it('narrows NBA teams to the fantasy team and lineup picked, keeping a picked NBA team', () => {
+    const benched = filterOptions(rows, { fantasyTeam: '11', nbaTeam: '', lineup: 'benched' }, { leagueTeams: league })
+    expect(benched.nbaTeams.map((team) => team.value)).toEqual(['DAL'])
+    const kept = filterOptions(rows, { fantasyTeam: '4', nbaTeam: 'DET', lineup: 'all' }, { leagueTeams: league })
+    expect(kept.nbaTeams.map((team) => team.value)).toEqual(['BOS', 'DET'])
   })
 })
 

@@ -1,4 +1,5 @@
 import type { SurpriseRow, Team } from '../../types/api';
+import { fantasyTeamOptionLabel } from '../../myTeam/display';
 
 export type LineupFilter = 'all' | 'started' | 'benched';
 
@@ -61,31 +62,45 @@ export function applyFilters(rows: SurpriseRow[], filters: SurpriseFilters, leag
   });
 }
 
-/** Every fantasy team in the league, by name, whether or not it has a row in
- * the period on screen: the list is the same on a quiet night and over the
- * season. NBA teams are the ones in the rows; a picked one stays in its list
- * when the period changes and it has no rows there. */
+export interface FilterContext {
+  leagueTeams?: Team[];
+  /** The viewer's own fantasy team leads the list. */
+  myTeamId?: number | null;
+  /** The rows past the score bars: the booms and busts on screen before any
+   * team filter. Without them every row counts. */
+  pastBars?: SurpriseRow[];
+}
+
+/** Every fantasy team in the league, by name, the viewer's own first, whether
+ * or not it has a row in the period on screen: the list is the same on a
+ * quiet night and over the season. NBA teams are only the ones with a boom or
+ * a bust to show for the fantasy team and lineup picked, so nobody scrolls
+ * past thirty teams to find the few that have something; a picked one stays
+ * in its list when it no longer has any. */
 export function filterOptions(
   rows: SurpriseRow[],
   filters: SurpriseFilters,
-  leagueTeams: Team[] = [],
+  { leagueTeams = [], myTeamId = null, pastBars }: FilterContext = {},
 ): { fantasyTeams: FilterOption[]; nbaTeams: FilterOption[] } {
   const fantasy = new Map<string, string>();
   const nba = new Set<string>();
   let freeAgents = leagueTeams.length > 0;
   const idByCode = idsByCode(leagueTeams);
   for (const team of leagueTeams) fantasy.set(String(team.team_id), team.team_name);
-  for (const row of rows) {
+  for (const row of applyFilters(pastBars ?? rows, { ...filters, nbaTeam: '' }, leagueTeams)) {
     if (row.team_abbr) nba.add(row.team_abbr);
+  }
+  for (const row of rows) {
     const team = teamKey(row, idByCode);
     if (team == null) freeAgents = true;
     else if (!fantasy.has(team)) fantasy.set(team, row.fantasy_team_name || row.fantasy_team || team);
   }
   if (teamPicked(filters) && !fantasy.has(filters.fantasyTeam)) fantasy.set(filters.fantasyTeam, filters.fantasyTeam);
   if (filters.nbaTeam !== '') nba.add(filters.nbaTeam);
+  const mine = myTeamId == null ? null : String(myTeamId);
   const fantasyTeams = [...fantasy.entries()]
-    .map(([value, label]) => ({ value, label }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .map(([value, label]) => ({ value, label: fantasyTeamOptionLabel(label, value === mine) }))
+    .sort((a, b) => Number(b.value === mine) - Number(a.value === mine) || a.label.localeCompare(b.label));
   if (freeAgents || filters.fantasyTeam === FREE_AGENTS) fantasyTeams.push({ value: FREE_AGENTS, label: 'Free agents' });
   return {
     fantasyTeams,
