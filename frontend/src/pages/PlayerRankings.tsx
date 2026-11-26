@@ -189,7 +189,7 @@ export default function PlayerRankings() {
   const isPunted = (cat: RankingCategory) => effectiveWeights[cat] === 0
 
   const recompute = () => {
-    const config: RankingsConfig = { calcMode, minGp, minMin, position: null, positions: positionsPicked, weights: effectiveWeights }
+    const config: RankingsConfig = { calcMode, minGp, minMin, position: null, positions: [], weights: effectiveWeights }
     const next = computePlayerRankings(players, config, categories, reverseCategories)
     // Low-priority: if another slider tick (or anything urgent) comes in
     // while this 500-row re-render is in flight, React interrupts/discards
@@ -223,24 +223,24 @@ export default function PlayerRankings() {
   useEffect(() => {
     if (players.length > 0 && hasCalculated) recompute()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weights, calcMode, positionsPicked])
+  }, [weights, calcMode])
 
   const sortedPlayers = useMemo(() => {
     if (!rankedPlayers.length) return []
-    const filtered = rankedPlayers.filter(r =>
+    const poolForRank = rankedPlayers.filter(r =>
       r.player.stats.gp >= minGp &&
-      (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin &&
-      matchesPositionFilter(r.player.positions, null, positionsPicked)
+      (r.player.stats.gp > 0 ? r.player.stats.minutes / r.player.stats.gp : 0) >= minMin
     )
     // rankedPlayers is already sorted by totalZ descending, so this keeps
     // "top N by rank" regardless of which column is currently sorted below.
     // The row number is the totalZ rank, so it stays with the player whichever
-    // column the table is sorted by. It's taken before the fantasy-team and
-    // NBA-team filters so a filtered player keeps his rank among the whole pool.
+    // column the table is sorted by. It's taken before position, fantasy-team,
+    // and NBA-team filters so a filtered player keeps his rank among the whole pool.
     // Search also runs after ranking, so a match keeps its overall rank, and it
     // ignores the Top-N limit — searching should find anyone in the pool.
-    const withRank = filtered
+    const withRank = poolForRank
       .map((ranked, idx) => ({ ranked, rank: idx + 1 }))
+      .filter(r => matchesPositionFilter(r.ranked.player.positions, null, positionsPicked))
       .filter(r => matchesFantasyTeam(r.ranked.player.team_id, fantasyTeam))
       .filter(r => matchesNbaTeam(r.ranked.player.pro_team, nbaTeams))
       .filter(r => !searchQuery || normalizePlayerName(r.ranked.player.player_name).includes(searchQuery))
