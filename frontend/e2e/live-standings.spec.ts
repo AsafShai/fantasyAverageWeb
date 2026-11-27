@@ -148,6 +148,11 @@ test('polls every 60 s only while games are live, not when all are final', async
   await page.goto(`/rankings${isMobile(page) ? '?ff=mobile' : ''}`)
   await expect(page.getByRole('button', { name: /^LIVE/ })).toBeVisible()
   const first = rankingHits
-  await page.clock.fastForward(61_000)
-  await expect.poll(() => rankingHits).toBeGreaterThan(first)
+  // Polling starts in an effect after the live response renders, so the 60 s
+  // timer may not exist yet when the badge shows. Keep advancing the clock
+  // until a poll lands instead of jumping once and hoping the timer was set.
+  await expect.poll(async () => {
+    await page.clock.fastForward(61_000)
+    return rankingHits
+  }).toBeGreaterThan(first)
 })
