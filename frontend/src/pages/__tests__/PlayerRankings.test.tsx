@@ -155,6 +155,35 @@ describe('PlayerRankings page', () => {
     expect(screen.getByText('Beta Wing')).toBeInTheDocument();
   });
 
+  it('filters by position without changing overall rank', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.includes('/players/')) {
+          return jsonResponse({
+            players: [
+              player('Alpha Guard', 700, 20, 600, 'LAL', ['PG']),
+              player('Beta Wing', 300, 10, 150, 'BOS', ['C']),
+            ],
+            total_count: 2, page: 1, limit: 1200, has_more: false,
+          });
+        }
+        if (url.includes('/teams/')) return jsonResponse([]);
+        if (url.includes('/league/activity/latest')) return jsonResponse({ teams: [], moves: [] });
+        return new Response('not found', { status: 404 });
+      }),
+    );
+    renderWithProviders(<PlayerRankings />);
+    await waitFor(() => expect(screen.getByText('Beta Wing')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /^C$/ }));
+    await waitFor(() => expect(screen.queryByText('Alpha Guard')).not.toBeInTheDocument());
+    const row = screen.getByText('Beta Wing').closest('tr')!;
+    expect(within(row).getAllByRole('cell')[0]).toHaveTextContent('2');
+  });
+
   it('highlights players on my team with the same row style as the phone table', async () => {
     localStorage.setItem('fw:myTeam.id', '7');
     const mine = player('Alpha Guard', 700, 20, 600);
